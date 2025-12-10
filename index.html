@@ -294,6 +294,68 @@ Amit_9876543210_Indeed, https://drive.google.com/..."></textarea>
         <button id="btnSaveCallDetails">Save Call Details</button>
       </div>
     </div>
+
+    <!-- HR: Discuss with Owners -->
+    <div id="panelOwnerDiscussHR" class="panel hidden">
+      <h2>Discuss with Owners</h2>
+      <div>
+        <label>Select Requirement</label>
+        <select id="ownerReqSelect"></select>
+        <button id="btnLoadOwnerList" style="margin-top:6px;">Load Candidates</button>
+      </div>
+      <div id="ownerDiscussContainer" style="margin-top:8px;"></div>
+      <p style="font-size:11px;color:#64748b;margin-top:8px;">
+        Yaha sirf woh candidates dikh rahe hain jo <b>SHORTLISTED</b> stage tak pahunch chuke hain.
+        Approved hone ke baad unka status <b>OWNER_APPROVED_WALKIN</b> ho jayega.
+      </p>
+    </div>
+
+    <!-- HR: Schedule Interviews -->
+    <div id="panelScheduleInterviewHR" class="panel hidden">
+      <h2>Schedule Interviews</h2>
+      <div>
+        <label>Select Requirement</label>
+        <select id="schedReqSelect"></select>
+        <button id="btnLoadSchedule" style="margin-top:6px;">Load Owner-Approved Candidates</button>
+      </div>
+      <div id="scheduleContainer" style="margin-top:8px;"></div>
+      <p style="font-size:11px;color:#64748b;margin-top:8px;">
+        Yaha sirf un candidates ko dikhaya jayega jinka status
+        <b>OWNER_APPROVED_WALKIN</b> hai. Aap date &amp; time set karke schedule save karein,
+        aur <b>Copy Message</b> se WhatsApp/Message ke liye text ready ho jayega.
+      </p>
+    </div>
+
+    <!-- HR: Walk-ins (Today) -->
+    <div id="panelWalkinsHR" class="panel hidden">
+      <h2>Walk-ins (Today)</h2>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:160px;">
+          <label>Interview Date</label>
+          <input id="walkinsDateInput" type="date" />
+        </div>
+        <button id="btnLoadWalkins">Load Walk-ins</button>
+      </div>
+      <div id="walkinsContainer" style="margin-top:8px;"></div>
+      <p style="font-size:11px;color:#64748b;margin-top:8px;">
+        Confirm Call se <b>ConfirmedCall</b> flag set hoga.
+        <b>Mark Appeared &amp; Get Link</b> se candidate ke liye walk-in form ka temporary link generate hoga.
+      </p>
+    </div>
+
+    <!-- Admin / EA: Tests -->
+    <div id="panelTests" class="panel hidden">
+      <h2>Tests (Excel / Tally / Voice)</h2>
+      <div>
+        <label>Select Requirement</label>
+        <select id="testsReqSelect"></select>
+        <button id="btnLoadTests" style="margin-top:6px;">Load Candidates</button>
+      </div>
+      <div id="testsContainer" style="margin-top:8px;"></div>
+      <p style="font-size:11px;color:#64748b;margin-top:8px;">
+        Accounts profiles → Excel + Tally, CRM/CCE/PC profiles → Excel + Voice. Jo fields relevant na hon, unhe blank chhod sakte ho.
+      </p>
+    </div>
   </section>
 </main>
 
