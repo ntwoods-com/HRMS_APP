@@ -17,348 +17,520 @@
     }
     header {
       background: #0f172a;
-      color: #fff;
-      padding: 12px 20px;
+      color: #e5e7eb;
+      padding: 10px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    .app-title {
-      font-weight: 600;
+    header h1 {
       font-size: 18px;
+      margin: 0;
     }
-    #userInfo {
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    header .user-info {
+      font-size: 13px;
+      opacity: 0.8;
     }
     main {
-      padding: 16px;
       max-width: 1200px;
       margin: 0 auto;
+      padding: 16px;
     }
-    #loginSection, #appSection {
-      margin-top: 8px;
+    .hidden {
+      display: none !important;
     }
-    .hidden { display: none; }
-
-    .tiles {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+    .card {
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+      padding: 16px;
       margin-bottom: 16px;
+    }
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
     }
     .tile {
       background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 2px 6px rgba(15,23,42,0.08);
-      padding: 12px;
-      min-width: 200px;
+      border-radius: 10px;
+      padding: 12px 14px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
       cursor: pointer;
-      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      border: 1px solid transparent;
+      transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease;
     }
     .tile:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 10px rgba(15,23,42,0.14);
+      box-shadow: 0 3px 8px rgba(15, 23, 42, 0.15);
+      border-color: #2563eb33;
     }
-    .tile-title {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 4px;
+    .tile h3 {
+      margin: 0 0 4px;
+      font-size: 15px;
     }
-    .tile-sub {
+    .tile p {
+      margin: 0;
       font-size: 12px;
-      color: #64748b;
+      color: #6b7280;
     }
-
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .badge-role {
+      background: #1d4ed8;
+      color: #e5e7eb;
+    }
+    .badge-ea {
+      background: #d97706;
+      color: #111827;
+    }
+    .badge-hr {
+      background: #059669;
+      color: #ecfdf5;
+    }
+    .badge-admin {
+      background: #7c3aed;
+      color: #f5f3ff;
+    }
     .panel {
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 2px 6px rgba(15,23,42,0.08);
-      margin-bottom: 16px;
+      margin-top: 8px;
     }
     .panel h2 {
-      margin-top: 0;
+      font-size: 18px;
+      margin: 0 0 10px;
+    }
+    .panel h3 {
       font-size: 16px;
-      margin-bottom: 10px;
+      margin: 16px 0 8px;
     }
-
     label {
-      font-size: 12px;
       display: block;
-      margin-top: 8px;
-      margin-bottom: 2px;
-    }
-    input, textarea, select, button {
       font-size: 13px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      border: 1px solid #cbd5e1;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    textarea,
+    select {
       width: 100%;
-      max-width: 100%;
-      font-family: inherit;
+      padding: 8px 10px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid #cbd5f5;
+      outline: none;
+      background: #f9fafb;
+      margin-bottom: 8px;
+    }
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px #bfdbfe;
+      background: #ffffff;
     }
     textarea {
+      min-height: 70px;
       resize: vertical;
     }
     button {
       border: none;
-      background: #2563eb;
-      color: #fff;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 13px;
       cursor: pointer;
-      margin-top: 10px;
-      width: auto;
+      background: #2563eb;
+      color: #eff6ff;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
     button.secondary {
-      background: #0f172a;
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button.danger {
+      background: #dc2626;
+      color: #fee2e2;
+    }
+    button.small {
+      padding: 4px 8px;
+      font-size: 11px;
     }
     button:disabled {
-      opacity: 0.6;
+      opacity: 0.5;
       cursor: default;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 8px;
       font-size: 12px;
+      margin-top: 8px;
     }
     th, td {
-      border: 1px solid #e2e8f0;
-      padding: 4px 6px;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e5e7eb;
       text-align: left;
       vertical-align: top;
     }
     th {
-      background: #f1f5f9;
+      background: #eff6ff;
       font-weight: 600;
+      font-size: 12px;
     }
-    .badge {
-      display: inline-block;
+    .status-pill {
+      display: inline-flex;
       padding: 2px 6px;
       border-radius: 999px;
       font-size: 10px;
-      background: #e0f2fe;
-      color: #0369a1;
+      font-weight: 600;
     }
-
-    @media (max-width: 768px) {
-      main {
-        padding: 12px;
-      }
-      .tile {
-        flex: 1 1 100%;
-      }
+    .status-SEND_BACK {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .status-VALID {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .status-DRAFT {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .status-UPLOADED,
+    .status-SHORTLISTED,
+    .status-SCHEDULED,
+    .status-OWNER_APPROVED_WALKIN {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+    .status-REJECTED {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .status-ON_HOLD {
+      background: #f3e8ff;
+      color: #6d28d9;
+    }
+    .muted {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      font-size: 11px;
+    }
+    .flex {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .flex-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .mt-8 { margin-top: 8px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-8 { margin-bottom: 8px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      font-size: 10px;
+    }
+    .link {
+      color: #1d4ed8;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .error {
+      color: #b91c1c;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .success {
+      color: #166534;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .loader-text {
+      font-size: 13px;
+      color: #6b7280;
     }
   </style>
 
-  <!-- Google Identity Services script -->
+  <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-
-<header>
-  <div class="app-title">NT Woods HRMS</div>
-  <div id="userInfo"></div>
-</header>
-
-<main>
-  <!-- LOGIN SECTION -->
-  <section id="loginSection">
-    <h2 style="font-size:16px;margin-bottom:8px;">Login with Google</h2>
-    <p style="font-size:12px;color:#64748b;margin-top:0;margin-bottom:8px;">
-      Please sign in with your official NT Woods Google account to access the HRMS portal.
-    </p>
-    <div id="g_id_signin"></div>
-  </section>
-
-  <!-- APP SECTION -->
-  <section id="appSection" class="hidden">
-    <!-- Tiles -->
-    <div class="tiles" id="roleTiles"></div>
-
-    <!-- EA: Raise Requirement -->
-    <div id="panelRequirementsEA" class="panel hidden">
-      <h2>Raise Requirement (EA)</h2>
-      <div>
-        <label>Job Role</label>
-        <select id="reqJobRole"></select>
-
-        <label>Job Title</label>
-        <input id="reqJobTitle" />
-
-        <label>Roles & Responsibilities</label>
-        <textarea id="reqResponsibilities" rows="3"></textarea>
-
-        <label>Must Have Skills</label>
-        <textarea id="reqMustHave" rows="3"></textarea>
-
-        <label>Shift</label>
-        <input id="reqShift" />
-
-        <label>Pay Scale</label>
-        <input id="reqPayScale" />
-
-        <label>Perks</label>
-        <input id="reqPerks" />
-
-        <label>Notes</label>
-        <textarea id="reqNotes" rows="2"></textarea>
-
-        <button id="btnCreateRequirement">Create Requirement</button>
-      </div>
+  <header>
+    <h1>NT Woods HRMS Portal</h1>
+    <div class="user-info" id="headerUserInfo">
+      Not signed in
     </div>
+  </header>
 
-    <!-- HR: Review Requirements -->
-    <div id="panelReqListHR" class="panel hidden">
-      <h2>Review Requirements (HR)</h2>
-      <div id="reqListContainer"></div>
-    </div>
-
-    <!-- HR: Upload CVs -->
-    <div id="panelUploadCVsHR" class="panel hidden">
-      <h2>Upload CVs (HR)</h2>
-      <div>
-        <label>Select Requirement</label>
-        <select id="uploadReqSelect"></select>
-
-        <label>CV List (one per line: FileName, FileURL)</label>
-        <textarea
-          id="cvListInput"
-          rows="6"
-          placeholder="Example:
-Rahul_9876543210_Naukri, https://drive.google.com/...
-Amit_9876543210_Indeed, https://drive.google.com/..."></textarea>
-
-        <button id="btnUploadCVs">Upload All CVs</button>
-
-        <div id="cvUploadProgress" style="margin-top:8px;font-size:12px;color:#0f172a;"></div>
-      </div>
-    </div>
-
-    <!-- HR: Shortlisting -->
-    <div id="panelShortlistHR" class="panel hidden">
-      <h2>Shortlisting (HR)</h2>
-      <div>
-        <label>Select Requirement</label>
-        <select id="shortlistReqSelect"></select>
-        <button id="btnLoadShortlist" style="margin-top:6px;">Load Candidates</button>
-      </div>
-      <div id="shortlistTableContainer" style="margin-top:8px;"></div>
-    </div>
-
-    <!-- HR: Call Screening -->
-    <div id="panelCallScreenHR" class="panel hidden">
-      <h2>Call Screening (HR)</h2>
-      <div>
-        <label>Select Requirement</label>
-        <select id="callReqSelect"></select>
-        <button id="btnLoadCallList" style="margin-top:6px;">Load Candidates</button>
-      </div>
-
-      <div id="callListContainer" style="margin-top:8px;"></div>
-
-      <div
-        id="callEditor"
-        class="hidden"
-        style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:8px;"
-      >
-        <h3 style="font-size:14px;margin-top:0;">
-          Call Details for <span id="callCandName"></span>
-        </h3>
-
-        <label>Family Background Notes</label>
-        <textarea id="callFamilyNotes" rows="3"></textarea>
-
-        <label>Call Status</label>
-        <select id="callStatusSelect">
-          <option value="">Select</option>
-          <option value="RecommendedOwner">Recommended for Owners</option>
-          <option value="SwitchedOff">Switched Off</option>
-          <option value="NoAnswer">No Answer</option>
-          <option value="NoIncoming">No Incoming</option>
-          <option value="Reject">Reject</option>
-        </select>
-
-        <label>Communication Skills (out of 10)</label>
-        <input id="callComm10" type="number" min="0" max="10"/>
-
-        <label>Professional Experience (out of 10)</label>
-        <input id="callExp10" type="number" min="0" max="10"/>
-
-        <label>HR Remark (On Call)</label>
-        <textarea id="callRemark" rows="2"></textarea>
-
-        <button id="btnSaveCallDetails">Save Call Details</button>
-      </div>
-    </div>
-
-    <!-- HR: Discuss with Owners -->
-    <div id="panelOwnerDiscussHR" class="panel hidden">
-      <h2>Discuss with Owners</h2>
-      <div>
-        <label>Select Requirement</label>
-        <select id="ownerReqSelect"></select>
-        <button id="btnLoadOwnerList" style="margin-top:6px;">Load Candidates</button>
-      </div>
-      <div id="ownerDiscussContainer" style="margin-top:8px;"></div>
-      <p style="font-size:11px;color:#64748b;margin-top:8px;">
-        Yaha sirf woh candidates dikh rahe hain jo <b>SHORTLISTED</b> stage tak pahunch chuke hain.
-        Approved hone ke baad unka status <b>OWNER_APPROVED_WALKIN</b> ho jayega.
+  <main>
+    <!-- LOGIN SECTION -->
+    <section id="loginSection" class="card">
+      <h2>Sign in</h2>
+      <p class="muted">
+        HRMS access ke liye NT Woods official Google account se sign-in karein.
       </p>
-    </div>
+      <div id="g_id_signin"></div>
+      <div id="loginError" class="error"></div>
+    </section>
 
-    <!-- HR: Schedule Interviews -->
-    <div id="panelScheduleInterviewHR" class="panel hidden">
-      <h2>Schedule Interviews</h2>
-      <div>
-        <label>Select Requirement</label>
-        <select id="schedReqSelect"></select>
-        <button id="btnLoadSchedule" style="margin-top:6px;">Load Owner-Approved Candidates</button>
-      </div>
-      <div id="scheduleContainer" style="margin-top:8px;"></div>
-      <p style="font-size:11px;color:#64748b;margin-top:8px;">
-        Yaha sirf un candidates ko dikhaya jayega jinka status
-        <b>OWNER_APPROVED_WALKIN</b> hai. Aap date &amp; time set karke schedule save karein,
-        aur <b>Copy Message</b> se WhatsApp/Message ke liye text ready ho jayega.
-      </p>
-    </div>
-
-    <!-- HR: Walk-ins (Today) -->
-    <div id="panelWalkinsHR" class="panel hidden">
-      <h2>Walk-ins (Today)</h2>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-        <div style="flex:1;min-width:160px;">
-          <label>Interview Date</label>
-          <input id="walkinsDateInput" type="date" />
+    <!-- APP SECTION -->
+    <section id="appSection" class="hidden">
+      <div class="card">
+        <div class="flex-between">
+          <div>
+            <div id="welcomeText" style="font-weight:600; font-size:15px;"></div>
+            <div id="roleBadges" class="mt-8"></div>
+          </div>
+          <div>
+            <button id="btnSignOut" class="secondary small">Sign out</button>
+          </div>
         </div>
-        <button id="btnLoadWalkins">Load Walk-ins</button>
       </div>
-      <div id="walkinsContainer" style="margin-top:8px;"></div>
-      <p style="font-size:11px;color:#64748b;margin-top:8px;">
-        Confirm Call se <b>ConfirmedCall</b> flag set hoga.
-        <b>Mark Appeared &amp; Get Link</b> se candidate ke liye walk-in form ka temporary link generate hoga.
-      </p>
-    </div>
 
-    <!-- Admin / EA: Tests -->
-    <div id="panelTests" class="panel hidden">
-      <h2>Tests (Excel / Tally / Voice)</h2>
-      <div>
-        <label>Select Requirement</label>
-        <select id="testsReqSelect"></select>
-        <button id="btnLoadTests" style="margin-top:6px;">Load Candidates</button>
+      <!-- Tiles -->
+      <div class="card">
+        <h2 style="margin-top:0;">Modules</h2>
+        <div class="tiles" id="roleTiles"></div>
       </div>
-      <div id="testsContainer" style="margin-top:8px;"></div>
-      <p style="font-size:11px;color:#64748b;margin-top:8px;">
-        Accounts profiles → Excel + Tally, CRM/CCE/PC profiles → Excel + Voice. Jo fields relevant na hon, unhe blank chhod sakte ho.
-      </p>
-    </div>
-  </section>
-</main>
 
-<script src="main.js"></script>
+      <!-- PANELS -->
+
+      <!-- EA: Raise Requirement -->
+      <div id="panelEARequirement" class="card panel hidden">
+        <h2>Raise Requirement (EA)</h2>
+        <p class="muted mb-8">
+          Job role select karte hi template auto-fill ho jayega. Aap changes kar sakte ho phir requirement save kar do.
+        </p>
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="eaJobRole">Job Role</label>
+            <select id="eaJobRole"></select>
+          </div>
+          <div>
+            <button id="btnLoadTemplate" class="small secondary">Load Template</button>
+          </div>
+        </div>
+        <label for="eaJobTitle">Job Title</label>
+        <input id="eaJobTitle" type="text" />
+
+        <label for="eaResponsibilities">Roles &amp; Responsibilities</label>
+        <textarea id="eaResponsibilities"></textarea>
+
+        <label for="eaMustHave">Must Have Skills</label>
+        <textarea id="eaMustHave"></textarea>
+
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="eaShift">Shift</label>
+            <input id="eaShift" type="text" />
+          </div>
+          <div style="flex:1;">
+            <label for="eaPayScale">Pay Scale</label>
+            <input id="eaPayScale" type="text" />
+          </div>
+        </div>
+
+        <label for="eaPerks">Perks</label>
+        <textarea id="eaPerks"></textarea>
+
+        <label for="eaNotes">Notes</label>
+        <textarea id="eaNotes"></textarea>
+
+        <button id="btnSaveRequirement">Save Requirement</button>
+        <div id="eaRequirementMsg" class="mt-8"></div>
+      </div>
+
+      <!-- EA: Incomplete / Valid Requirements -->
+      <div id="panelEARequirementsView" class="card panel hidden">
+        <h2>My Requirements (EA View)</h2>
+        <p class="muted">
+          Incomplete = HR ne <strong>SEND_BACK</strong> mark kiya. Valid = HR ne requirement approve kar di.
+        </p>
+        <button id="btnRefreshEARequirements" class="small">Refresh</button>
+        <div id="eaReqViewContainer" class="mt-12 loader-text">Loading...</div>
+      </div>
+
+      <!-- HR: Review Requirements -->
+      <div id="panelHRRequirementsReview" class="card panel hidden">
+        <h2>Review Requirements (HR)</h2>
+        <p class="muted">
+          Yahan se HR requirement ko <strong>VALID</strong> ya <strong>SEND_BACK</strong> mark karega, remark compulsory for SEND_BACK.
+        </p>
+        <button id="btnRefreshHRRequirements" class="small">Refresh</button>
+        <div id="hrRequirementsContainer" class="mt-12 loader-text">Loading...</div>
+      </div>
+
+      <!-- HR: Upload CVs -->
+      <div id="panelHRUploadCVs" class="card panel hidden">
+        <h2>Upload CVs (HR)</h2>
+        <p class="muted">
+          Abhi basic version: Requirement ID choose karo, fir neeche file list (name + URL) paste karo.
+          Backend fileName se <code>CandidateName_Mobile_Source</code> parse karega.
+        </p>
+        <label for="uploadRequirementId">Requirement ID</label>
+        <input id="uploadRequirementId" type="text" placeholder="e.g. REQ-0001" />
+
+        <label for="uploadCVList">
+          CV List (one per line: <code>FileName,FileUrl</code>)
+        </label>
+        <textarea id="uploadCVList" placeholder="John_9876543210_Naukri,https://drive.google.com/...."></textarea>
+
+        <button id="btnUploadCVs">Upload All</button>
+        <div id="uploadCVMsg" class="mt-8"></div>
+      </div>
+
+      <!-- HR: Shortlisting -->
+      <div id="panelHRShortlisting" class="card panel hidden">
+        <h2>Shortlisting (HR)</h2>
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="shortlistRequirementId">Requirement ID</label>
+            <input id="shortlistRequirementId" type="text" placeholder="REQ-0001" />
+          </div>
+          <div>
+            <button id="btnLoadShortlist" class="small">Load Candidates</button>
+          </div>
+        </div>
+        <div id="shortlistContainer" class="mt-12 loader-text">No data loaded.</div>
+      </div>
+
+      <!-- HR: Call Screening -->
+      <div id="panelHRCallScreen" class="card panel hidden">
+        <h2>On-call Screening (HR)</h2>
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="callRequirementId">Requirement ID</label>
+            <input id="callRequirementId" type="text" placeholder="REQ-0001" />
+          </div>
+          <div>
+            <button id="btnLoadCallScreen" class="small">Load Candidates</button>
+          </div>
+        </div>
+        <div id="callScreenContainer" class="mt-12 loader-text">No data loaded.</div>
+      </div>
+
+      <!-- HR: Owner Discussion -->
+      <div id="panelHROwnerDiscuss" class="card panel hidden">
+        <h2>Discuss with Owners (HR)</h2>
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="ownerRequirementId">Requirement ID</label>
+            <input id="ownerRequirementId" type="text" placeholder="REQ-0001" />
+          </div>
+          <div>
+            <button id="btnLoadOwnerDiscuss" class="small">Load Candidates</button>
+          </div>
+        </div>
+        <div id="ownerDiscussContainer" class="mt-12 loader-text">No data loaded.</div>
+      </div>
+
+      <!-- HR: Job Posting -->
+      <div id="panelHRJobPosting" class="card panel hidden">
+        <h2>Job Posting (Portals Tracking)</h2>
+        <p class="muted">
+          Har requirement ke liye Naukri / Indeed / WorkIndia / Apna / Direct ka posting status &amp; screenshot URL track karein.
+        </p>
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="postingRequirementId">Requirement ID</label>
+            <input id="postingRequirementId" type="text" placeholder="REQ-0001" />
+          </div>
+          <div>
+            <button id="btnLoadJobPosting" class="small">Load</button>
+          </div>
+        </div>
+        <div id="jobPostingContainer" class="mt-12 loader-text">No data loaded.</div>
+      </div>
+
+      <!-- HR: Schedule Interviews -->
+      <div id="panelHRScheduleInterviews" class="card panel hidden">
+        <h2>Schedule Interviews (HR)</h2>
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="scheduleReqId">Requirement ID</label>
+            <input id="scheduleReqId" type="text" placeholder="REQ-0001" />
+          </div>
+          <div>
+            <button id="btnLoadSchedule" class="small">Load Candidates</button>
+          </div>
+        </div>
+        <div id="scheduleContainer" class="mt-12 loader-text">No data loaded.</div>
+      </div>
+
+      <!-- HR: Walk-ins -->
+      <div id="panelHRWalkins" class="card panel hidden">
+        <h2>Walk-ins (Today ke Interviews)</h2>
+        <div class="flex">
+          <div>
+            <label for="walkinDate">Interview Date</label>
+            <input id="walkinDate" type="date" />
+          </div>
+          <div style="padding-top:18px;">
+            <button id="btnLoadWalkins" class="small">Load</button>
+          </div>
+        </div>
+        <div class="muted mt-8">
+          <strong>Confirm Call</strong> = telephonic confirmation,  
+          <strong>Appeared</strong> = candidate office aa gaya; link generate hoga walk-in form ka.
+        </div>
+        <div id="walkinsContainer" class="mt-12 loader-text">No data loaded.</div>
+      </div>
+
+      <!-- Tests Panel (Admin / EA) -->
+      <div id="panelTests" class="card panel hidden">
+        <h2>Tests Panel (Excel / Tally / Voice)</h2>
+        <p class="muted">
+          Candidate ID daalo, marks update karo. Excel / Tally / Voice kisi bhi combination me blank reh sakte hain.
+        </p>
+        <label for="testCandidateId">Candidate ID</label>
+        <input id="testCandidateId" type="text" placeholder="CAND-00001" />
+
+        <div class="flex">
+          <div style="flex:1;">
+            <label for="testExcelMarks">Excel (out of 10)</label>
+            <input id="testExcelMarks" type="number" min="0" max="10" />
+          </div>
+          <div style="flex:1;">
+            <label for="testTallyMarks">Tally (out of 10)</label>
+            <input id="testTallyMarks" type="number" min="0" max="10" />
+          </div>
+          <div style="flex:1;">
+            <label for="testVoiceMarks">Voice (out of 10)</label>
+            <input id="testVoiceMarks" type="number" min="0" max="10" />
+          </div>
+        </div>
+        <button id="btnSaveTests">Save Marks</button>
+        <div id="testPanelMsg" class="mt-8"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
 </body>
 </html>
