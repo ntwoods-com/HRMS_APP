@@ -1,176 +1,71 @@
 /***************************************************
- * main.js - Single Frontend JS File
- * - Google OAuth (GIS) login (HRMS portal)
- * - Simple API client
- * - Role-based tiles & Phase-1+ UIs:
- *   EA: Raise Requirement
- *   HR: Review Requirements, Upload CVs, Shortlisting, Call Screening,
- *       Owner Discussion, Schedule Interviews, Walk-ins (Today)
- *   ADMIN/EA: Tests (Excel/Tally/Voice)
- *   PUBLIC: Candidate Walk-in Form (token-based, random math)
+ * main.js - NT Woods HRMS Frontend
+ * - Google OAuth (GIS) login
+ * - Single API client (GET/POST)
+ * - Role-based tiles
+ *   EA: Raise Requirement, My Requirements, Tests
+ *   HR: Review, Upload CVs, Shortlisting, Call,
+ *       Owner Discussion, Job Posting, Schedule,
+ *       Walk-ins
+ *   ADMIN: Dono ka superset
  ***************************************************/
 
-// CONFIG
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxh0etYDCdS7JmluGDhIjJT5JdI6GAtE0UyfTjIDon4OBXbryr5FIN73KCZYhW74jc_Zg/exec';
+// ===== CONFIG =====
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxh0etYDCdS7JmluGDhIjJT5JdI6GAtE0UyfTjIDon4OBXbryr5FIN73KCZYhW74jc_Zg/exec'; // e.g. https://script.google.com/macros/s/AKfycb.../exec
 const GOOGLE_CLIENT_ID = '1029752642188-ku0k9krbdbsttj9br238glq8h4k5loj3.apps.googleusercontent.com';
 
+// Walk-in form page (GitHub Pages me same repo me rakhoge)
+const WALKIN_FORM_URL = window.location.origin + '/walkin_form.html';
+
+// ===== GLOBAL STATE =====
 let currentUser = null;
 let idToken = null;
 let jobTemplatesCache = [];
-let hrReqCache = [];
 
-// HR call screening
-let currentCallCandId = null;
-
-// Walk-in form (public) state
-let currentWalkinToken = null;
-let walkinQuestions = [];
-
-/***************************************************
- * DOM refs (HRMS portal)
- ***************************************************/
-const loginSection = document.getElementById('loginSection');
-const appSection   = document.getElementById('appSection');
-const userInfoEl   = document.getElementById('userInfo');
-const roleTilesEl  = document.getElementById('roleTiles');
-
-// EA panel refs
-const panelRequirementsEA = document.getElementById('panelRequirementsEA');
-const reqJobRole      = document.getElementById('reqJobRole');
-const reqJobTitle     = document.getElementById('reqJobTitle');
-const reqResp         = document.getElementById('reqResponsibilities');
-const reqMust         = document.getElementById('reqMustHave');
-const reqShift        = document.getElementById('reqShift');
-const reqPay          = document.getElementById('reqPayScale');
-const reqPerks        = document.getElementById('reqPerks');
-const reqNotes        = document.getElementById('reqNotes');
-const btnCreateReq    = document.getElementById('btnCreateRequirement');
-
-// HR: Review Requirements
-const panelReqListHR   = document.getElementById('panelReqListHR');
-const reqListContainer = document.getElementById('reqListContainer');
-
-// HR: Upload CVs
-const panelUploadCVsHR = document.getElementById('panelUploadCVsHR');
-const uploadReqSelect  = document.getElementById('uploadReqSelect');
-const cvListInput      = document.getElementById('cvListInput');
-const btnUploadCVs     = document.getElementById('btnUploadCVs');
-const cvUploadProgress = document.getElementById('cvUploadProgress');
-
-// HR: Shortlisting
-const panelShortlistHR        = document.getElementById('panelShortlistHR');
-const shortlistReqSelect      = document.getElementById('shortlistReqSelect');
-const btnLoadShortlist        = document.getElementById('btnLoadShortlist');
-const shortlistTableContainer = document.getElementById('shortlistTableContainer');
-
-// HR: Call Screening
-const panelCallScreenHR  = document.getElementById('panelCallScreenHR');
-const callReqSelect      = document.getElementById('callReqSelect');
-const btnLoadCallList    = document.getElementById('btnLoadCallList');
-const callListContainer  = document.getElementById('callListContainer');
-const callEditor         = document.getElementById('callEditor');
-const callCandName       = document.getElementById('callCandName');
-const callFamilyNotes    = document.getElementById('callFamilyNotes');
-const callStatusSelect   = document.getElementById('callStatusSelect');
-const callComm10         = document.getElementById('callComm10');
-const callExp10          = document.getElementById('callExp10');
-const callRemark         = document.getElementById('callRemark');
-const btnSaveCallDetails = document.getElementById('btnSaveCallDetails');
-
-// HR: Owner Discussion + Schedule
-const panelOwnerDiscussHR      = document.getElementById('panelOwnerDiscussHR');
-const panelScheduleInterviewHR = document.getElementById('panelScheduleInterviewHR');
-
-// Owner discussion controls
-const ownerReqSelect        = document.getElementById('ownerReqSelect');
-const btnLoadOwnerList      = document.getElementById('btnLoadOwnerList');
-const ownerDiscussContainer = document.getElementById('ownerDiscussContainer');
-
-// Schedule interview controls
-const schedReqSelect    = document.getElementById('schedReqSelect');
-const btnLoadSchedule   = document.getElementById('btnLoadSchedule');
-const scheduleContainer = document.getElementById('scheduleContainer');
-
-// HR: Walk-ins (today)
-const panelWalkinsHR      = document.getElementById('panelWalkinsHR');
-const walkinsDateInput    = document.getElementById('walkinsDateInput');
-const btnLoadWalkins      = document.getElementById('btnLoadWalkins');
-const walkinsContainer    = document.getElementById('walkinsContainer');
-
-// Admin/EA: Tests panel
-const panelTests       = document.getElementById('panelTests');
-const testsReqSelect   = document.getElementById('testsReqSelect');
-const btnLoadTests     = document.getElementById('btnLoadTests');
-const testsContainer   = document.getElementById('testsContainer');
-
-/***************************************************
- * DOM refs (PUBLIC Candidate Walk-in Form page)
- ***************************************************/
-const walkinFormRoot      = document.getElementById('walkinFormRoot');
-const wkCandidateNameEl   = document.getElementById('wkCandidateName');
-const wkJobPostEl         = document.getElementById('wkJobPost');
-const wkQuestionContainer = document.getElementById('wkQuestionContainer');
-const wkStatusMsg         = document.getElementById('wkStatusMsg');
-const btnWalkinSubmit     = document.getElementById('btnWalkinSubmit');
-
-/***************************************************
- * INIT
- ***************************************************/
-window.addEventListener('load', () => {
-  initGoogleLoginIfPresent();
-  initWalkinFormIfNeeded();
-});
-
-function initGoogleLoginIfPresent() {
-  const gisDiv = document.getElementById('g_id_signin');
-  if (!gisDiv) return; // walk-in page pe GIS nahi chalega
-
-  if (window.google && window.google.accounts && window.google.accounts.id) {
-    google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleCredentialResponse
-    });
-    google.accounts.id.renderButton(
-      gisDiv,
-      { theme: "outline", size: "large" }
-    );
-  } else {
-    console.error('Google Identity Services not loaded');
-  }
+// ===== Simple helpers =====
+function $(id) {
+  return document.getElementById(id);
 }
 
-/***************************************************
- * Google Credential callback
- ***************************************************/
-function handleCredentialResponse(response) {
-  idToken = response.credential;
-  apiGet('me')
-    .then(res => {
-      if (res.success) {
-        currentUser = res.user;
-        onLoginSuccess();
-      } else {
-        alert('Access denied: ' + (res.error || 'Unknown error'));
-      }
-    })
-    .catch(err => {
-      console.error(err);
-      alert('Login failed. Please contact MIS.');
-    });
+function show(el) {
+  if (typeof el === 'string') el = $(el);
+  if (el) el.classList.remove('hidden');
 }
 
-/***************************************************
- * API Helpers
- ***************************************************/
+function hide(el) {
+  if (typeof el === 'string') el = $(el);
+  if (el) el.classList.add('hidden');
+}
+
+function htmlEscape(str) {
+  return (str || '')
+    .toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ===== API CLIENT =====
 async function apiGet(action, params = {}) {
-  params.action = action;
+  const url = new URL(API_BASE_URL);
+  url.searchParams.set('action', action);
   if (idToken) {
-    params.idToken = idToken;
+    url.searchParams.set('idToken', idToken);
   }
-  const query = new URLSearchParams(params).toString();
-  const url = `${API_BASE_URL}?${query}`;
-  const res = await fetch(url);
-  return res.json();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) {
+      url.searchParams.set(k, v);
+    }
+  });
+
+  const res = await fetch(url.toString(), { method: 'GET' });
+  const json = await res.json().catch(() => ({}));
+  if (!json.success) {
+    throw new Error(json.error || 'API GET error: ' + action);
+  }
+  return json;
 }
 
 async function apiPost(action, data = {}) {
@@ -181,1463 +76,1239 @@ async function apiPost(action, data = {}) {
   };
   const res = await fetch(API_BASE_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-  return res.json();
+  const json = await res.json().catch(() => ({}));
+  if (!json.success) {
+    throw new Error(json.error || 'API POST error: ' + action);
+  }
+  return json;
 }
 
-/***************************************************
- * Login success: show HRMS UI
- ***************************************************/
-function onLoginSuccess() {
-  if (!loginSection || !appSection || !userInfoEl) return;
+// ===== Google Identity Services callback =====
+async function handleCredentialResponse(response) {
+  try {
+    const token = response.credential;
+    if (!token) {
+      throw new Error('Empty credential from Google');
+    }
+    idToken = token;
+    $('loginError').innerText = '';
 
-  loginSection.classList.add('hidden');
-  appSection.classList.remove('hidden');
+    const me = await apiGet('me');
+    currentUser = me.user;
+    renderAppAfterLogin();
+  } catch (err) {
+    console.error(err);
+    $('loginError').innerText = 'Login failed: ' + err;
+  }
+}
 
-  userInfoEl.innerHTML = `
-    <span style="font-size:12px;">${currentUser.name} (${currentUser.role})</span>
-    <button style="font-size:11px;margin-left:8px;padding:4px 8px;border-radius:999px;" onclick="logout()">Logout</button>
+function initGoogleLogin() {
+  try {
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+      google.accounts.id.renderButton(
+        $('g_id_signin'),
+        { theme: 'outline', size: 'large' }
+      );
+    } else {
+      $('loginError').innerText = 'Google Identity script load error.';
+    }
+  } catch (err) {
+    console.error(err);
+    $('loginError').innerText = 'Google login init failed.';
+  }
+}
+
+// ===== App after login =====
+function renderAppAfterLogin() {
+  if (!currentUser) return;
+
+  $('headerUserInfo').innerText = `${currentUser.name} (${currentUser.email})`;
+  $('welcomeText').innerText = `Welcome, ${currentUser.name}`;
+  $('roleBadges').innerHTML = `
+    <span class="badge badge-role">${htmlEscape(currentUser.role)}</span>
   `;
+
+  hide('loginSection');
+  show('appSection');
 
   renderRoleTiles();
-  if (currentUser.role === 'EA' || currentUser.role === 'ADMIN') {
-    loadJobTemplates();
-  }
-  if (currentUser.role === 'HR' || currentUser.role === 'ADMIN') {
-    loadRequirementsForHR();
-  }
+  wireAllButtons();
 }
 
-function logout() {
-  idToken = null;
-  currentUser = null;
-  location.reload();
-}
-
-/***************************************************
- * Tiles (module selector)
- ***************************************************/
+// ===== Tiles based on role =====
 function renderRoleTiles() {
-  if (!roleTilesEl) return;
-  roleTilesEl.innerHTML = '';
+  const container = $('roleTiles');
+  container.innerHTML = '';
+  if (!currentUser) return;
 
-  // EA tiles
-  if (currentUser.role === 'EA' || currentUser.role === 'ADMIN') {
-    addTile('Raise Requirement', 'Create new hiring requirements', () => {
-      showPanel('EA_REQUIREMENT');
-    });
+  const tiles = [];
 
-    addTile('Tests Panel', 'Enter Excel / Tally / Voice marks', () => {
-      showPanel('TESTS_PANEL');
-      ensureHRReqDropdowns();
-    });
+  // EA + ADMIN
+  if (['EA', 'ADMIN'].includes(currentUser.role)) {
+    tiles.push(
+      {
+        id: 'tile-ea-raise',
+        title: 'Raise Requirement',
+        desc: 'EA / Admin – create new hiring requirement using templates.',
+        panelId: 'panelEARequirement'
+      },
+      {
+        id: 'tile-ea-req-view',
+        title: 'My Requirements',
+        desc: 'EA view – Incomplete vs Valid requirements (HR SEND_BACK / VALID).',
+        panelId: 'panelEARequirementsView'
+      },
+      {
+        id: 'tile-tests',
+        title: 'Tests Panel',
+        desc: 'Excel, Tally, Voice marks entry for candidates.',
+        panelId: 'panelTests'
+      }
+    );
   }
 
-  // HR tiles
-  if (currentUser.role === 'HR' || currentUser.role === 'ADMIN') {
-    addTile('Review Requirements', 'Validate or send back requirements', () => {
-      showPanel('HR_REQUIREMENT_REVIEW');
-      loadRequirementsForHR();
-    });
-
-    addTile('Upload CVs', 'Batch upload CVs for a requirement', () => {
-      showPanel('HR_UPLOAD_CVS');
-      ensureHRReqDropdowns();
-    });
-
-    addTile('Shortlisting', 'First glance approve / reject CVs', () => {
-      showPanel('HR_SHORTLIST');
-      ensureHRReqDropdowns();
-    });
-
-    addTile('Call Screening', 'On-call discussion & scoring', () => {
-      showPanel('HR_CALL_SCREEN');
-      ensureHRReqDropdowns();
-    });
-
-    addTile('Discuss with Owners', 'Owner approval / hold for walk-ins', () => {
-      showPanel('HR_OWNER_DISCUSS');
-      ensureHRReqDropdowns();
-    });
-
-    addTile('Schedule Interviews', 'Finalize interview date & time', () => {
-      showPanel('HR_SCHEDULE_INTERVIEW');
-      ensureHRReqDropdowns();
-    });
-
-    addTile('Walk-ins (Today)', 'Today ke interviews & walk-ins', () => {
-      showPanel('HR_WALKINS');
-      initWalkinsDateToToday();
-      loadWalkinsForSelectedDate();
-    });
+  // HR + ADMIN
+  if (['HR', 'ADMIN'].includes(currentUser.role)) {
+    tiles.push(
+      {
+        id: 'tile-hr-req-review',
+        title: 'Review Requirements',
+        desc: 'HR validation – mark requirements as VALID or SEND_BACK.',
+        panelId: 'panelHRRequirementsReview'
+      },
+      {
+        id: 'tile-hr-upload-cvs',
+        title: 'Upload CVs',
+        desc: 'Bulk CV upload per requirement (filename based parsing).',
+        panelId: 'panelHRUploadCVs'
+      },
+      {
+        id: 'tile-hr-shortlist',
+        title: 'Shortlisting',
+        desc: 'Approve / Reject CVs with stage tag “Shortlisting”.',
+        panelId: 'panelHRShortlisting'
+      },
+      {
+        id: 'tile-hr-call-screen',
+        title: 'On-call Screening',
+        desc: 'Family background + communication / experience scoring.',
+        panelId: 'panelHRCallScreen'
+      },
+      {
+        id: 'tile-hr-owner-discuss',
+        title: 'Discuss with Owners',
+        desc: 'Owner decision: Approve / Reject / Hold + Walk-in date/time.',
+        panelId: 'panelHROwnerDiscuss'
+      },
+      {
+        id: 'tile-hr-job-posting',
+        title: 'Job Posting',
+        desc: 'Portal-wise posted status + screenshot URLs.',
+        panelId: 'panelHRJobPosting'
+      },
+      {
+        id: 'tile-hr-schedule',
+        title: 'Schedule Interviews',
+        desc: 'Convert owner approved candidates to scheduled interviews.',
+        panelId: 'panelHRScheduleInterviews'
+      },
+      {
+        id: 'tile-hr-walkins',
+        title: 'Walk-ins',
+        desc: 'Today ke interviews, confirm call + appeared → walk-in form link.',
+        panelId: 'panelHRWalkins'
+      }
+    );
   }
+
+  tiles.forEach(tile => {
+    const div = document.createElement('div');
+    div.className = 'tile';
+    div.id = tile.id;
+    div.innerHTML = `
+      <h3>${htmlEscape(tile.title)}</h3>
+      <p>${htmlEscape(tile.desc)}</p>
+    `;
+    div.addEventListener('click', () => showPanel(tile.panelId));
+    container.appendChild(div);
+  });
 }
 
-function addTile(title, sub, onClick) {
-  const div = document.createElement('div');
-  div.className = 'tile';
-  div.innerHTML = `
-    <div class="tile-title">${title}</div>
-    <div class="tile-sub">${sub}</div>
-  `;
-  div.addEventListener('click', onClick);
-  roleTilesEl.appendChild(div);
-}
-
-function showPanel(panelKey) {
-  // HRMS panels hi exist karenge index.html par
-  const panels = [
-    panelRequirementsEA,
-    panelReqListHR,
-    panelUploadCVsHR,
-    panelShortlistHR,
-    panelCallScreenHR,
-    panelOwnerDiscussHR,
-    panelScheduleInterviewHR,
-    panelWalkinsHR,
-    panelTests
+// ===== Panel show/hide =====
+function hideAllPanels() {
+  const ids = [
+    'panelEARequirement',
+    'panelEARequirementsView',
+    'panelHRRequirementsReview',
+    'panelHRUploadCVs',
+    'panelHRShortlisting',
+    'panelHRCallScreen',
+    'panelHROwnerDiscuss',
+    'panelHRJobPosting',
+    'panelHRScheduleInterviews',
+    'panelHRWalkins',
+    'panelTests'
   ];
-  panels.forEach(p => p && p.classList.add('hidden'));
+  ids.forEach(hide);
+}
 
-  switch (panelKey) {
-    case 'EA_REQUIREMENT':
-      panelRequirementsEA && panelRequirementsEA.classList.remove('hidden');
+function showPanel(panelId) {
+  hideAllPanels();
+  show(panelId);
+
+  // lazy-load specific data on first open or refresh button
+  switch (panelId) {
+    case 'panelEARequirement':
+      loadJobTemplatesIfNeeded();
       break;
-    case 'HR_REQUIREMENT_REVIEW':
-      panelReqListHR && panelReqListHR.classList.remove('hidden');
+    case 'panelEARequirementsView':
+      loadEARequirementsView();
       break;
-    case 'HR_UPLOAD_CVS':
-      panelUploadCVsHR && panelUploadCVsHR.classList.remove('hidden');
-      break;
-    case 'HR_SHORTLIST':
-      panelShortlistHR && panelShortlistHR.classList.remove('hidden');
-      break;
-    case 'HR_CALL_SCREEN':
-      panelCallScreenHR && panelCallScreenHR.classList.remove('hidden');
-      break;
-    case 'HR_OWNER_DISCUSS':
-      panelOwnerDiscussHR && panelOwnerDiscussHR.classList.remove('hidden');
-      break;
-    case 'HR_SCHEDULE_INTERVIEW':
-      panelScheduleInterviewHR && panelScheduleInterviewHR.classList.remove('hidden');
-      break;
-    case 'HR_WALKINS':
-      panelWalkinsHR && panelWalkinsHR.classList.remove('hidden');
-      break;
-    case 'TESTS_PANEL':
-      panelTests && panelTests.classList.remove('hidden');
+    case 'panelHRRequirementsReview':
+      loadHRRequirements();
       break;
   }
 }
 
-/***************************************************
- * EA: Job Templates & Create Requirement
- ***************************************************/
-async function loadJobTemplates() {
+// ===== Job Templates & EA Raise Requirement =====
+async function loadJobTemplatesIfNeeded() {
+  const select = $('eaJobRole');
+  if (jobTemplatesCache.length) {
+    renderJobRoleOptions(jobTemplatesCache);
+    return;
+  }
   try {
+    select.innerHTML = `<option value="">Loading...</option>`;
     const res = await apiGet('get_job_templates');
-    if (res.success) {
-      jobTemplatesCache = res.data || [];
-      fillJobRoleDropdown();
-    } else {
-      console.error(res.error);
-    }
+    jobTemplatesCache = res.data || [];
+    renderJobRoleOptions(jobTemplatesCache);
   } catch (err) {
     console.error(err);
+    select.innerHTML = `<option value="">Failed to load templates</option>`;
   }
 }
 
-function fillJobRoleDropdown() {
-  if (!reqJobRole) return;
-  reqJobRole.innerHTML = '<option value="">Select Job Role</option>';
-  jobTemplatesCache.forEach(t => {
+function renderJobRoleOptions(templates) {
+  const select = $('eaJobRole');
+  select.innerHTML = `<option value="">Select Job Role</option>`;
+  const uniqueRoles = [...new Set(templates.map(t => t.JobRole))];
+  uniqueRoles.forEach(role => {
     const opt = document.createElement('option');
-    opt.value = t.JobRole;
-    opt.textContent = t.JobRole;
-    reqJobRole.appendChild(opt);
-  });
-
-  reqJobRole.addEventListener('change', () => {
-    const role = reqJobRole.value;
-    const template = jobTemplatesCache.find(t => t.JobRole === role);
-    if (template) {
-      reqJobTitle.value = template.JobTitleDefault || '';
-      reqResp.value     = template.ResponsibilitiesDefault || '';
-      reqMust.value     = template.MustHaveDefault || '';
-      reqShift.value    = template.ShiftDefault || '';
-      reqPay.value      = template.PayScaleDefault || '';
-      reqPerks.value    = template.PerksDefault || '';
-      reqNotes.value    = template.NotesDefault || '';
-    } else {
-      reqJobTitle.value = '';
-      reqResp.value = '';
-      reqMust.value = '';
-      reqShift.value = '';
-      reqPay.value = '';
-      reqPerks.value = '';
-      reqNotes.value = '';
-    }
+    opt.value = role;
+    opt.textContent = role;
+    select.appendChild(opt);
   });
 }
 
-btnCreateReq && btnCreateReq.addEventListener('click', async () => {
-  if (!reqJobRole.value) {
-    alert('Please select Job Role');
+function applyTemplateForSelectedRole() {
+  const role = $('eaJobRole').value;
+  if (!role || !jobTemplatesCache.length) return;
+
+  const tpl = jobTemplatesCache.find(t => t.JobRole === role);
+  if (!tpl) return;
+
+  $('eaJobTitle').value = tpl.JobTitleDefault || '';
+  $('eaResponsibilities').value = tpl.ResponsibilitiesDefault || '';
+  $('eaMustHave').value = tpl.MustHaveDefault || '';
+  $('eaShift').value = tpl.ShiftDefault || '';
+  $('eaPayScale').value = tpl.PayScaleDefault || '';
+  $('eaPerks').value = tpl.PerksDefault || '';
+  $('eaNotes').value = tpl.NotesDefault || '';
+}
+
+async function saveRequirementEA() {
+  const jobRole = $('eaJobRole').value.trim();
+  const jobTitle = $('eaJobTitle').value.trim();
+  const responsibilities = $('eaResponsibilities').value.trim();
+  const mustHave = $('eaMustHave').value.trim();
+  const shift = $('eaShift').value.trim();
+  const payScale = $('eaPayScale').value.trim();
+  const perks = $('eaPerks').value.trim();
+  const notes = $('eaNotes').value.trim();
+
+  const msgEl = $('eaRequirementMsg');
+  msgEl.className = '';
+  msgEl.innerText = '';
+
+  if (!jobRole || !jobTitle) {
+    msgEl.className = 'error';
+    msgEl.innerText = 'Job Role & Job Title mandatory hain.';
     return;
   }
-  btnCreateReq.disabled = true;
-  btnCreateReq.textContent = 'Creating...';
 
   try {
-    const payload = {
-      jobRole: reqJobRole.value,
-      jobTitle: reqJobTitle.value,
-      responsibilities: reqResp.value,
-      mustHave: reqMust.value,
-      shift: reqShift.value,
-      payScale: reqPay.value,
-      perks: reqPerks.value,
-      notes: reqNotes.value
-    };
-    const res = await apiPost('create_requirement', payload);
-    if (res.success) {
-      alert('Requirement created: ' + res.requirementId);
-      reqJobRole.value = '';
-      reqJobTitle.value = '';
-      reqResp.value = '';
-      reqMust.value = '';
-      reqShift.value = '';
-      reqPay.value = '';
-      reqPerks.value = '';
-      reqNotes.value = '';
-    } else {
-      alert('Error: ' + res.error);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Error creating requirement');
-  } finally {
-    btnCreateReq.disabled = false;
-    btnCreateReq.textContent = 'Create Requirement';
-  }
-});
-
-/***************************************************
- * HR Requirements cache helpers
- ***************************************************/
-function fillHRReqDropdowns() {
-  const selects = [
-    uploadReqSelect,
-    shortlistReqSelect,
-    callReqSelect,
-    ownerReqSelect,
-    schedReqSelect,
-    testsReqSelect
-  ];
-  selects.forEach(sel => {
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Select Requirement</option>';
-    hrReqCache.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.RequirementId;
-      opt.textContent = `${r.RequirementId} · ${r.JobRole} · ${r.JobTitle}`;
-      sel.appendChild(opt);
+    $('btnSaveRequirement').disabled = true;
+    const res = await apiPost('create_requirement', {
+      jobRole,
+      jobTitle,
+      responsibilities,
+      mustHave,
+      shift,
+      payScale,
+      perks,
+      notes
     });
-  });
-}
-
-async function ensureHRReqDropdowns() {
-  if (hrReqCache.length) {
-    fillHRReqDropdowns();
-    return;
-  }
-  try {
-    const res = await apiGet('list_requirements');
-    if (res.success) {
-      hrReqCache = res.data || [];
-      fillHRReqDropdowns();
-    }
+    msgEl.className = 'success';
+    msgEl.innerText = `Requirement saved: ${res.requirementId}`;
   } catch (err) {
     console.error(err);
+    msgEl.className = 'error';
+    msgEl.innerText = 'Failed: ' + err;
+  } finally {
+    $('btnSaveRequirement').disabled = false;
   }
 }
 
-/***************************************************
- * HR: Review Requirements (Valid / Send Back)
- ***************************************************/
-async function loadRequirementsForHR() {
-  if (!(currentUser && (currentUser.role === 'HR' || currentUser.role === 'ADMIN'))) return;
-  if (!reqListContainer) return;
-
-  reqListContainer.innerHTML = 'Loading requirements...';
+// ===== EA Requirements View (Incomplete / Valid) =====
+async function loadEARequirementsView() {
+  const container = $('eaReqViewContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
 
   try {
-    const res = await apiGet('list_requirements');
-    if (!res.success) {
-      reqListContainer.innerHTML = 'Error: ' + res.error;
-      return;
-    }
+    const res = await apiGet('list_requirements_ea_view');
+    const data = res.data || { incomplete: [], valid: [], all: [] };
 
-    const rows = res.data || [];
-    hrReqCache = rows;
-    fillHRReqDropdowns();
+    container.className = 'mt-12';
+    container.innerHTML = `
+      <h3>Incomplete (SEND_BACK)</h3>
+      ${renderRequirementTable(data.incomplete)}
 
-    if (!rows.length) {
-      reqListContainer.innerHTML = 'No requirements found.';
-      return;
-    }
+      <h3 class="mt-16">Valid</h3>
+      ${renderRequirementTable(data.valid)}
 
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
+      <h3 class="mt-16">All (My Requirements)</h3>
+      ${renderRequirementTable(data.all)}
+    `;
+  } catch (err) {
+    console.error(err);
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
+  }
+}
+
+function renderRequirementTable(list) {
+  if (!list || !list.length) {
+    return `<div class="muted">No records.</div>`;
+  }
+  let rows = '';
+  list.forEach(r => {
+    const st = htmlEscape(r.Status || '');
+    rows += `
       <tr>
-        <th>ID</th>
-        <th>Job Role</th>
-        <th>Job Title</th>
-        <th>Status</th>
-        <th>Actions</th>
+        <td>${htmlEscape(r.RequirementId)}</td>
+        <td>${htmlEscape(r.JobRole)}</td>
+        <td>${htmlEscape(r.JobTitle)}</td>
+        <td><span class="status-pill status-${st}">${st}</span></td>
+        <td>${htmlEscape(r.HRRemark || '')}</td>
       </tr>
     `;
-    table.appendChild(thead);
+  });
+  return `
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>RequirementId</th>
+            <th>Role</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>HR Remark</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
 
-    const tbody = document.createElement('tbody');
+// ===== HR Requirements Review =====
+async function loadHRRequirements() {
+  const container = $('hrRequirementsContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
 
-    rows.forEach(r => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${r.RequirementId}</td>
-        <td>${r.JobRole}</td>
-        <td>${r.JobTitle}</td>
-        <td><span class="badge">${r.Status || ''}</span></td>
-        <td></td>
+  try {
+    const res = await apiGet('list_requirements');
+    const list = res.data || [];
+
+    container.className = 'mt-12';
+    if (!list.length) {
+      container.innerHTML = `<div class="muted">No requirements found.</div>`;
+      return;
+    }
+
+    let rows = '';
+    list.forEach(r => {
+      const st = r.Status || '';
+      rows += `
+        <tr data-req-id="${htmlEscape(r.RequirementId)}">
+          <td>${htmlEscape(r.RequirementId)}</td>
+          <td>${htmlEscape(r.JobRole)}</td>
+          <td>${htmlEscape(r.JobTitle)}</td>
+          <td><span class="status-pill status-${htmlEscape(st)}">${htmlEscape(st)}</span></td>
+          <td>${htmlEscape(r.HRRemark || '')}</td>
+          <td>
+            <select class="hr-status-select">
+              <option value="">--Select--</option>
+              <option value="VALID">VALID</option>
+              <option value="SEND_BACK">SEND_BACK</option>
+            </select>
+            <input class="hr-remark-input" type="text" placeholder="HR remark (for SEND_BACK mandatory)" />
+            <button class="small btn-save-status">Save</button>
+          </td>
+        </tr>
       `;
-      const tdActions = tr.querySelector('td:last-child');
+    });
 
-      const btnValid = document.createElement('button');
-      btnValid.textContent = 'Valid';
-      btnValid.style.fontSize = '11px';
-      btnValid.style.padding = '4px 6px';
-      btnValid.addEventListener('click', () => {
-        hrUpdateRequirementStatus(r.RequirementId, 'VALID');
-      });
+    container.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>RequirementId</th>
+              <th>Role</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>HR Remark</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
 
-      const btnSendBack = document.createElement('button');
-      btnSendBack.textContent = 'Send Back';
-      btnSendBack.style.fontSize = '11px';
-      btnSendBack.style.padding = '4px 6px';
-      btnSendBack.style.marginLeft = '4px';
-      btnSendBack.addEventListener('click', () => {
-        const remark = prompt('Send-back remark for EA:');
-        if (remark !== null) {
-          hrUpdateRequirementStatus(r.RequirementId, 'SEND_BACK', remark);
+    container.querySelectorAll('.btn-save-status').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tr = btn.closest('tr');
+        const reqId = tr.getAttribute('data-req-id');
+        const status = tr.querySelector('.hr-status-select').value;
+        const remark = tr.querySelector('.hr-remark-input').value.trim();
+
+        if (!status) {
+          alert('Status select karo.');
+          return;
+        }
+        if (status === 'SEND_BACK' && !remark) {
+          alert('SEND_BACK ke liye remark mandatory hai.');
+          return;
+        }
+
+        btn.disabled = true;
+        try {
+          await apiPost('update_requirement_status', {
+            requirementId: reqId,
+            status,
+            hrRemark: remark
+          });
+          alert('Updated.');
+          loadHRRequirements();
+        } catch (err) {
+          console.error(err);
+          alert('Error: ' + err);
+        } finally {
+          btn.disabled = false;
         }
       });
-
-      tdActions.appendChild(btnValid);
-      tdActions.appendChild(btnSendBack);
-
-      tbody.appendChild(tr);
     });
-
-    table.appendChild(tbody);
-    reqListContainer.innerHTML = '';
-    reqListContainer.appendChild(table);
-
   } catch (err) {
     console.error(err);
-    reqListContainer.innerHTML = 'Error loading requirements.';
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
   }
 }
 
-async function hrUpdateRequirementStatus(requirementId, status, remark='') {
-  try {
-    const res = await apiPost('update_requirement_status', {
-      requirementId,
-      status,
-      hrRemark: remark
-    });
-    if (res.success) {
-      alert('Updated: ' + requirementId + ' → ' + status);
-      loadRequirementsForHR();
-    } else {
-      alert('Error: ' + res.error);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Failed to update requirement');
-  }
-}
+// ===== HR Upload CVs =====
+async function uploadCVs() {
+  const reqId = $('uploadRequirementId').value.trim();
+  const text = $('uploadCVList').value.trim();
+  const msgEl = $('uploadCVMsg');
+  msgEl.className = '';
+  msgEl.innerText = '';
 
-/***************************************************
- * HR: Upload CVs (batch)
- ***************************************************/
-btnUploadCVs && btnUploadCVs.addEventListener('click', async () => {
-  const reqId = uploadReqSelect.value;
-  if (!reqId) {
-    alert('Please select a requirement.');
+  if (!reqId || !text) {
+    msgEl.className = 'error';
+    msgEl.innerText = 'Requirement ID aur CV list required hai.';
     return;
   }
 
-  const raw = cvListInput.value.trim();
-  if (!raw) {
-    alert('Please paste CV list (FileName, FileURL) line by line.');
-    return;
-  }
-
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-  if (!lines.length) {
-    alert('No valid lines found.');
-    return;
-  }
-
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const files = [];
   for (const line of lines) {
     const parts = line.split(',');
     if (parts.length < 2) continue;
     const fileName = parts[0].trim();
-    const fileUrl  = parts.slice(1).join(',').trim();
+    const fileUrl = parts.slice(1).join(',').trim();
     if (!fileName || !fileUrl) continue;
     files.push({ fileName, fileUrl });
   }
 
   if (!files.length) {
-    alert('No valid "FileName, FileURL" entries parsed.');
+    msgEl.className = 'error';
+    msgEl.innerText = 'Koi valid line nahi mili (FileName,FileUrl).';
     return;
   }
 
-  cvUploadProgress.textContent = `Uploading ${files.length} CVs...`;
-  btnUploadCVs.disabled = true;
-
   try {
+    $('btnUploadCVs').disabled = true;
+    msgEl.className = 'loader-text';
+    msgEl.innerText = `Uploading ${files.length} CVs...`;
+
     const res = await apiPost('batch_upload_cvs', {
       requirementId: reqId,
       files
     });
 
-    if (res.success) {
-      cvUploadProgress.textContent = `Uploaded ${files.length} CVs successfully. Candidates: ${
-        (res.candidates || []).join(', ')
-      }`;
-      cvListInput.value = '';
-    } else {
-      cvUploadProgress.textContent = 'Error: ' + res.error;
-    }
+    msgEl.className = 'success';
+    msgEl.innerText = `Uploaded ${files.length} CVs. Candidates: ${res.candidates.join(', ')}`;
   } catch (err) {
     console.error(err);
-    cvUploadProgress.textContent = 'Error uploading CVs.';
+    msgEl.className = 'error';
+    msgEl.innerText = 'Error: ' + err;
   } finally {
-    btnUploadCVs.disabled = false;
-  }
-});
-
-/***************************************************
- * HR: Shortlisting
- ***************************************************/
-btnLoadShortlist && btnLoadShortlist.addEventListener('click', async () => {
-  const reqId = shortlistReqSelect.value;
-  if (!reqId) {
-    alert('Please select requirement.');
-    return;
-  }
-  await loadShortlistCandidates(reqId);
-});
-
-async function loadShortlistCandidates(reqId) {
-  shortlistTableContainer.innerHTML = 'Loading candidates...';
-  try {
-    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    if (!res.success) {
-      shortlistTableContainer.innerHTML = 'Error: ' + res.error;
-      return;
-    }
-
-    const list = (res.data || []).filter(c =>
-      c.Status === 'UPLOADED' || c.Status === 'SHORTLISTED'
-    );
-    if (!list.length) {
-      shortlistTableContainer.innerHTML = 'No CVs found for shortlisting.';
-      return;
-    }
-
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-      <tr>
-        <th>Candidate ID</th>
-        <th>Name</th>
-        <th>Mobile</th>
-        <th>Source</th>
-        <th>Status</th>
-        <th>Actions</th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-
-    list.forEach(c => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${c.CandidateId}</td>
-        <td>${c.CandidateName}</td>
-        <td>${c.Mobile}</td>
-        <td>${c.Source}</td>
-        <td><span class="badge">${c.Status}</span></td>
-        <td></td>
-      `;
-      const tdActions = tr.querySelector('td:last-child');
-
-      const btnApprove = document.createElement('button');
-      btnApprove.textContent = 'Approve';
-      btnApprove.style.fontSize = '11px';
-      btnApprove.style.padding = '4px 6px';
-      btnApprove.addEventListener('click', () => {
-        shortlistDecision(c.CandidateId, 'APPROVE');
-      });
-
-      const btnReject = document.createElement('button');
-      btnReject.textContent = 'Reject';
-      btnReject.style.fontSize = '11px';
-      btnReject.style.padding = '4px 6px';
-      btnReject.style.marginLeft = '4px';
-      btnReject.addEventListener('click', () => {
-        const remark = prompt('Rejection remark (Shortlisting):');
-        if (remark !== null) {
-          shortlistDecision(c.CandidateId, 'REJECT', remark);
-        }
-      });
-
-      tdActions.appendChild(btnApprove);
-      tdActions.appendChild(btnReject);
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    shortlistTableContainer.innerHTML = '';
-    shortlistTableContainer.appendChild(table);
-
-  } catch (err) {
-    console.error(err);
-    shortlistTableContainer.innerHTML = 'Error loading candidates.';
+    $('btnUploadCVs').disabled = false;
   }
 }
 
-async function shortlistDecision(candidateId, decision, remark='') {
+// ===== HR Shortlisting =====
+async function loadShortlisting() {
+  const reqId = $('shortlistRequirementId').value.trim();
+  const container = $('shortlistContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
+
+  if (!reqId) {
+    container.className = 'error mt-12';
+    container.innerText = 'Requirement ID daaliye.';
+    return;
+  }
+
   try {
-    const res = await apiPost('shortlist_decision', {
-      candidateId,
+    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
+    const list = (res.data || []).filter(c => ['UPLOADED', 'SHORTLISTED'].includes(c.Status));
+
+    if (!list.length) {
+      container.className = 'mt-12 muted';
+      container.innerText = 'No candidates for shortlisting.';
+      return;
+    }
+
+    container.className = 'mt-12';
+    let rows = '';
+    list.forEach(c => {
+      rows += `
+        <tr data-cid="${htmlEscape(c.CandidateId)}">
+          <td>${htmlEscape(c.CandidateId)}</td>
+          <td>${htmlEscape(c.CandidateName)}</td>
+          <td>${htmlEscape(c.Mobile)}</td>
+          <td>${htmlEscape(c.Source)}</td>
+          <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
+          <td>
+            <button class="small btn-approve">Approve</button>
+            <button class="small danger btn-reject">Reject</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    container.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>CandidateId</th>
+              <th>Name</th>
+              <th>Mobile</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    container.querySelectorAll('.btn-approve').forEach(btn => {
+      btn.addEventListener('click', () => shortlistDecision(btn, 'APPROVE'));
+    });
+    container.querySelectorAll('.btn-reject').forEach(btn => {
+      btn.addEventListener('click', () => shortlistDecision(btn, 'REJECT'));
+    });
+  } catch (err) {
+    console.error(err);
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
+  }
+}
+
+async function shortlistDecision(btn, decision) {
+  const tr = btn.closest('tr');
+  const cid = tr.getAttribute('data-cid');
+  let remark = '';
+  if (decision === 'REJECT') {
+    remark = prompt('Rejection remark (Shortlisting stage):') || '';
+    if (!remark.trim()) {
+      alert('Remark required for rejection.');
+      return;
+    }
+  }
+  btn.disabled = true;
+  try {
+    await apiPost('shortlist_decision', {
+      candidateId: cid,
       decision,
       remark
     });
-    if (res.success) {
-      alert(`Updated ${candidateId} → ${decision}`);
-      const reqId = shortlistReqSelect.value;
-      if (reqId) {
-        loadShortlistCandidates(reqId);
-      }
-    } else {
-      alert('Error: ' + res.error);
-    }
+    alert('Saved.');
+    loadShortlisting();
   } catch (err) {
     console.error(err);
-    alert('Failed to update decision.');
+    alert('Error: ' + err);
+  } finally {
+    btn.disabled = false;
   }
 }
 
-/***************************************************
- * HR: Call Screening
- ***************************************************/
-btnLoadCallList && btnLoadCallList.addEventListener('click', async () => {
-  const reqId = callReqSelect.value;
+// ===== HR Call Screening =====
+async function loadCallScreening() {
+  const reqId = $('callRequirementId').value.trim();
+  const container = $('callScreenContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
+
   if (!reqId) {
-    alert('Please select requirement.');
+    container.className = 'error mt-12';
+    container.innerText = 'Requirement ID daaliye.';
     return;
   }
-  await loadCallScreenCandidates(reqId);
-});
-
-async function loadCallScreenCandidates(reqId) {
-  callListContainer.innerHTML = 'Loading candidates...';
-  callEditor.classList.add('hidden');
-  currentCallCandId = null;
 
   try {
     const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    if (!res.success) {
-      callListContainer.innerHTML = 'Error: ' + res.error;
-      return;
-    }
-
     const list = (res.data || []).filter(c => c.Status === 'SHORTLISTED');
+
     if (!list.length) {
-      callListContainer.innerHTML = 'No candidates for call screening.';
+      container.className = 'mt-12 muted';
+      container.innerText = 'No candidates for call screening.';
       return;
     }
 
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-      <tr>
-        <th>Candidate ID</th>
-        <th>Name</th>
-        <th>Mobile</th>
-        <th>Source</th>
-        <th>Open</th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
+    container.className = 'mt-12';
+    let rows = '';
     list.forEach(c => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${c.CandidateId}</td>
-        <td>${c.CandidateName}</td>
-        <td>${c.Mobile}</td>
-        <td>${c.Source}</td>
-        <td></td>
+      rows += `
+        <tr data-cid="${htmlEscape(c.CandidateId)}">
+          <td>${htmlEscape(c.CandidateId)}</td>
+          <td>${htmlEscape(c.CandidateName)}</td>
+          <td>${htmlEscape(c.Mobile)}</td>
+          <td>${htmlEscape(c.Source)}</td>
+          <td>
+            <textarea class="cs-family" placeholder="Family background notes..."></textarea>
+          </td>
+          <td>
+            <select class="cs-call-status">
+              <option value="RecommendedOwner">Recommended for Owners</option>
+              <option value="SwitchedOff">Switched Off</option>
+              <option value="NoAnswer">No Answer</option>
+              <option value="NoIncoming">No Incoming</option>
+              <option value="Reject">Reject</option>
+            </select>
+            <input class="cs-comm" type="number" min="0" max="10" placeholder="Comm /10" />
+            <input class="cs-exp" type="number" min="0" max="10" placeholder="Exp /10" />
+            <input class="cs-remark" type="text" placeholder="Remark (for Reject)" />
+            <button class="small btn-save-call">Save</button>
+          </td>
+        </tr>
       `;
-      const tdOpen = tr.querySelector('td:last-child');
-      const btnOpen = document.createElement('button');
-      btnOpen.textContent = 'Open';
-      btnOpen.style.fontSize = '11px';
-      btnOpen.style.padding = '4px 6px';
-      btnOpen.addEventListener('click', () => {
-        openCallEditor(c);
-      });
-      tdOpen.appendChild(btnOpen);
-      tbody.appendChild(tr);
     });
 
-    table.appendChild(tbody);
-    callListContainer.innerHTML = '';
-    callListContainer.appendChild(table);
+    container.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>CandidateId</th>
+              <th>Name</th>
+              <th>Mobile</th>
+              <th>Source</th>
+              <th>Family Notes</th>
+              <th>Call Status & Scores</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
 
+    container.querySelectorAll('.btn-save-call').forEach(btn => {
+      btn.addEventListener('click', () => saveCallScreenRow(btn));
+    });
   } catch (err) {
     console.error(err);
-    callListContainer.innerHTML = 'Error loading candidates.';
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
   }
 }
 
-function openCallEditor(candidate) {
-  currentCallCandId = candidate.CandidateId;
-  callCandName.textContent = `${candidate.CandidateName} (${candidate.Mobile})`;
-  callFamilyNotes.value = '';
-  callStatusSelect.value = '';
-  callComm10.value = '';
-  callExp10.value = '';
-  callRemark.value = '';
-  callEditor.classList.remove('hidden');
-}
-
-btnSaveCallDetails && btnSaveCallDetails.addEventListener('click', async () => {
-  if (!currentCallCandId) {
-    alert('No candidate selected.');
-    return;
-  }
-
-  const familyNotes = callFamilyNotes.value.trim();
-  const callStatus  = callStatusSelect.value;
-  const comm10      = callComm10.value;
-  const exp10       = callExp10.value;
-  const remark      = callRemark.value.trim();
+async function saveCallScreenRow(btn) {
+  const tr = btn.closest('tr');
+  const cid = tr.getAttribute('data-cid');
+  const familyNotes = tr.querySelector('.cs-family').value.trim();
+  const callStatus = tr.querySelector('.cs-call-status').value;
+  const comm = Number(tr.querySelector('.cs-comm').value || 0);
+  const exp = Number(tr.querySelector('.cs-exp').value || 0);
+  const remark = tr.querySelector('.cs-remark').value.trim();
 
   if (!callStatus) {
-    alert('Please select Call Status.');
+    alert('Call status select karo.');
+    return;
+  }
+  if (callStatus === 'Reject' && !remark) {
+    alert('Reject ke liye remark mandatory hai.');
     return;
   }
 
-  const cVal = Number(comm10);
-  const eVal = Number(exp10);
-  if (isNaN(cVal) || isNaN(eVal) || cVal < 0 || cVal > 10 || eVal < 0 || eVal > 10) {
-    alert('Marks should be between 0 and 10.');
-    return;
-  }
-
+  btn.disabled = true;
   try {
-    const res = await apiPost('call_screening_update', {
-      candidateId: currentCallCandId,
+    await apiPost('call_screening_update', {
+      candidateId: cid,
       familyNotes,
       callStatus,
-      communication10: cVal,
-      experience10: eVal,
+      communication10: comm,
+      experience10: exp,
       hrRemark: remark
     });
-
-    if (res.success) {
-      alert('Call details saved.');
-      const reqId = callReqSelect.value;
-      if (reqId) {
-        loadCallScreenCandidates(reqId);
-      }
-      callEditor.classList.add('hidden');
-      currentCallCandId = null;
-    } else {
-      alert('Error: ' + res.error);
-    }
+    alert('Saved.');
   } catch (err) {
     console.error(err);
-    alert('Failed to save call details.');
-  }
-});
-
-/***************************************************
- * HR: Owner Discussion
- ***************************************************/
-btnLoadOwnerList && btnLoadOwnerList.addEventListener('click', async () => {
-  const reqId = ownerReqSelect.value;
-  if (!reqId) {
-    alert('Please select requirement.');
-    return;
-  }
-  await loadOwnerCandidates(reqId);
-});
-
-async function loadOwnerCandidates(reqId) {
-  ownerDiscussContainer.innerHTML = 'Loading candidates...';
-
-  try {
-    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    if (!res.success) {
-      ownerDiscussContainer.innerHTML = 'Error: ' + res.error;
-      return;
-    }
-
-    const list = (res.data || []).filter(c => c.Status === 'SHORTLISTED');
-    if (!list.length) {
-      ownerDiscussContainer.innerHTML = 'No candidates for owner discussion.';
-      return;
-    }
-
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-      <tr>
-        <th>Candidate ID</th>
-        <th>Name</th>
-        <th>Mobile</th>
-        <th>Source</th>
-        <th>Owner Decision</th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-
-    list.forEach(c => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${c.CandidateId}</td>
-        <td>${c.CandidateName}</td>
-        <td>${c.Mobile}</td>
-        <td>${c.Source}</td>
-        <td></td>
-      `;
-      const tdActions = tr.querySelector('td:last-child');
-
-      const btnApprove = document.createElement('button');
-      btnApprove.textContent = 'Approve Walk-in';
-      btnApprove.style.fontSize = '11px';
-      btnApprove.style.padding = '4px 6px';
-      btnApprove.addEventListener('click', () => {
-        ownerDecisionFlow(c.CandidateId, 'APPROVED');
-      });
-
-      const btnReject = document.createElement('button');
-      btnReject.textContent = 'Reject';
-      btnReject.style.fontSize = '11px';
-      btnReject.style.padding = '4px 6px';
-      btnReject.style.marginLeft = '4px';
-      btnReject.addEventListener('click', () => {
-        ownerDecisionFlow(c.CandidateId, 'REJECTED');
-      });
-
-      const btnHold = document.createElement('button');
-      btnHold.textContent = 'Hold';
-      btnHold.style.fontSize = '11px';
-      btnHold.style.padding = '4px 6px';
-      btnHold.style.marginLeft = '4px';
-      btnHold.addEventListener('click', () => {
-        ownerDecisionFlow(c.CandidateId, 'HOLD');
-      });
-
-      tdActions.appendChild(btnApprove);
-      tdActions.appendChild(btnReject);
-      tdActions.appendChild(btnHold);
-
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    ownerDiscussContainer.innerHTML = '';
-    ownerDiscussContainer.appendChild(table);
-
-  } catch (err) {
-    console.error(err);
-    ownerDiscussContainer.innerHTML = 'Error loading candidates.';
+    alert('Error: ' + err);
+  } finally {
+    btn.disabled = false;
   }
 }
 
-async function ownerDecisionFlow(candidateId, decision) {
-  let ownerRemark = '';
-  let walkinDate = '';
-  let walkinTime = '';
-  let holdReason = '';
+// ===== HR Owner Discussion =====
+async function loadOwnerDiscuss() {
+  const reqId = $('ownerRequirementId').value.trim();
+  const container = $('ownerDiscussContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
 
-  if (decision === 'APPROVED') {
-    walkinDate = prompt('Walk-in Date (YYYY-MM-DD):', '');
-    if (!walkinDate) {
-      alert('Walk-in date required.');
-      return;
-    }
-    walkinTime = prompt('Walk-in Time (e.g. 10:30 AM):', '');
-    if (!walkinTime) {
-      alert('Walk-in time required.');
-      return;
-    }
-    ownerRemark = prompt('Owner remark (optional):', '') || '';
-  } else if (decision === 'REJECTED') {
-    ownerRemark = prompt('Owner rejection remark:', '');
-    if (!ownerRemark) {
-      alert('Rejection remark required.');
-      return;
-    }
-  } else if (decision === 'HOLD') {
-    holdReason = prompt('Hold reason:', '');
-    if (!holdReason) {
-      alert('Hold reason required.');
-      return;
-    }
-    ownerRemark = prompt('Owner remark (optional):', '') || '';
+  if (!reqId) {
+    container.className = 'error mt-12';
+    container.innerText = 'Requirement ID daaliye.';
+    return;
   }
 
   try {
-    const res = await apiPost('owner_decision', {
-      candidateId,
+    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
+    const list = (res.data || []).filter(c => ['SHORTLISTED', 'ON_HOLD'].includes(c.Status));
+
+    if (!list.length) {
+      container.className = 'mt-12 muted';
+      container.innerText = 'No candidates for owner discussion.';
+      return;
+    }
+
+    container.className = 'mt-12';
+    let rows = '';
+    list.forEach(c => {
+      rows += `
+        <tr data-cid="${htmlEscape(c.CandidateId)}">
+          <td>${htmlEscape(c.CandidateId)}</td>
+          <td>${htmlEscape(c.CandidateName)}</td>
+          <td>${htmlEscape(c.JobRole || '')}</td>
+          <td>${htmlEscape(c.JobTitle || '')}</td>
+          <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
+          <td>
+            <select class="owner-decision">
+              <option value="APPROVED">APPROVED (Walk-in)</option>
+              <option value="REJECTED">REJECTED</option>
+              <option value="HOLD">HOLD</option>
+            </select>
+            <input class="owner-walk-date" type="date" />
+            <input class="owner-walk-time" type="time" />
+            <input class="owner-hold" type="text" placeholder="Hold reason" />
+            <input class="owner-remark" type="text" placeholder="Owner remark" />
+            <button class="small btn-save-owner">Save</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    container.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>CandidateId</th>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Owner Decision</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    container.querySelectorAll('.btn-save-owner').forEach(btn => {
+      btn.addEventListener('click', () => saveOwnerRow(btn));
+    });
+  } catch (err) {
+    console.error(err);
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
+  }
+}
+
+async function saveOwnerRow(btn) {
+  const tr = btn.closest('tr');
+  const cid = tr.getAttribute('data-cid');
+  const decision = tr.querySelector('.owner-decision').value;
+  const walkDate = tr.querySelector('.owner-walk-date').value;
+  const walkTime = tr.querySelector('.owner-walk-time').value;
+  const hold = tr.querySelector('.owner-hold').value.trim();
+  const remark = tr.querySelector('.owner-remark').value.trim();
+
+  if (!decision) {
+    alert('Owner decision select karo.');
+    return;
+  }
+  if (decision === 'APPROVED' && (!walkDate || !walkTime)) {
+    alert('Approved ke liye Walk-in date & time required.');
+    return;
+  }
+  if (decision === 'REJECTED' && !remark) {
+    alert('Rejected ke liye remark mandatory hai.');
+    return;
+  }
+  if (decision === 'HOLD' && !hold) {
+    alert('Hold reason daalo.');
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    await apiPost('owner_decision', {
+      candidateId: cid,
       ownerDecision: decision,
-      ownerRemark,
-      walkinDate,
-      walkinTime,
-      holdReason
+      ownerRemark: remark,
+      walkinDate: walkDate,
+      walkinTime: walkTime,
+      holdReason: hold
     });
-
-    if (res.success) {
-      alert(`Owner decision saved for ${candidateId}: ${decision}`);
-      const reqId = ownerReqSelect.value;
-      if (reqId) {
-        loadOwnerCandidates(reqId);
-      }
-    } else {
-      alert('Error: ' + res.error);
-    }
+    alert('Saved.');
   } catch (err) {
     console.error(err);
-    alert('Failed to save owner decision.');
+    alert('Error: ' + err);
+  } finally {
+    btn.disabled = false;
   }
 }
 
-/***************************************************
- * HR: Schedule Interviews
- ***************************************************/
-btnLoadSchedule && btnLoadSchedule.addEventListener('click', async () => {
-  const reqId = schedReqSelect.value;
+// ===== Job Posting Panel =====
+async function loadJobPosting() {
+  const reqId = $('postingRequirementId').value.trim();
+  const container = $('jobPostingContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
+
   if (!reqId) {
-    alert('Please select requirement.');
+    container.className = 'error mt-12';
+    container.innerText = 'Requirement ID daaliye.';
     return;
   }
-  await loadScheduleCandidates(reqId);
-});
-
-async function loadScheduleCandidates(reqId) {
-  scheduleContainer.innerHTML = 'Loading candidates...';
 
   try {
-    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    if (!res.success) {
-      scheduleContainer.innerHTML = 'Error: ' + res.error;
-      return;
-    }
+    const res = await apiGet('list_job_postings', { requirementId: reqId });
+    const existing = res.data || [];
 
-    const reqMeta = hrReqCache.find(r => r.RequirementId === reqId);
-    const jobTitle = reqMeta ? (reqMeta.JobTitle || reqMeta.JobRole || '') : '';
+    const portals = ['Naukri', 'Indeed', 'WorkIndia', 'Apna', 'Direct'];
+    const byPortal = {};
+    existing.forEach(p => {
+      byPortal[p.PortalName] = p;
+    });
 
-    const list = (res.data || []).filter(c => c.Status === 'OWNER_APPROVED_WALKIN');
-    if (!list.length) {
-      scheduleContainer.innerHTML = 'No owner-approved candidates for scheduling.';
-      return;
-    }
-
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-      <tr>
-        <th>Candidate ID</th>
-        <th>Name</th>
-        <th>Mobile</th>
-        <th>Interview Date</th>
-        <th>Interview Time</th>
-        <th>Actions</th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-
-    list.forEach(c => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${c.CandidateId}</td>
-        <td>${c.CandidateName}</td>
-        <td>${c.Mobile}</td>
-        <td><input type="date" class="sched-date" style="font-size:11px;padding:2px 4px;"></td>
-        <td><input type="time" class="sched-time" style="font-size:11px;padding:2px 4px;"></td>
-        <td></td>
+    container.className = 'mt-12';
+    let rows = '';
+    portals.forEach(p => {
+      const row = byPortal[p] || {};
+      const checked = row.Posted ? 'checked' : '';
+      const url = row.ScreenshotUrl || '';
+      rows += `
+        <tr data-portal="${htmlEscape(p)}">
+          <td>${htmlEscape(p)}</td>
+          <td style="text-align:center;">
+            <input class="jp-posted" type="checkbox" ${checked} />
+          </td>
+          <td>
+            <input class="jp-url" type="text" value="${htmlEscape(url)}" placeholder="Screenshot URL (optional)" />
+          </td>
+        </tr>
       `;
-      const tdActions = tr.querySelector('td:last-child');
-      const dateInput = tr.querySelector('.sched-date');
-      const timeInput = tr.querySelector('.sched-time');
-
-      const btnSave = document.createElement('button');
-      btnSave.textContent = 'Save Schedule';
-      btnSave.style.fontSize = '11px';
-      btnSave.style.padding = '4px 6px';
-      btnSave.addEventListener('click', () => {
-        const d = dateInput.value;
-        const t = timeInput.value;
-        if (!d || !t) {
-          alert('Please set both date and time.');
-          return;
-        }
-        saveInterviewSchedule(c.CandidateId, d, t);
-      });
-
-      const btnCopy = document.createElement('button');
-      btnCopy.textContent = 'Copy Message';
-      btnCopy.style.fontSize = '11px';
-      btnCopy.style.padding = '4px 6px';
-      btnCopy.style.marginLeft = '4px';
-      btnCopy.addEventListener('click', () => {
-        const d = dateInput.value;
-        const t = timeInput.value;
-        if (!d || !t) {
-          alert('Please set date & time before copying message.');
-          return;
-        }
-        copyInterviewMessage(c.CandidateName, jobTitle, d, t);
-      });
-
-      tdActions.appendChild(btnSave);
-      tdActions.appendChild(btnCopy);
-      tbody.appendChild(tr);
     });
 
-    table.appendChild(tbody);
-    scheduleContainer.innerHTML = '';
-    scheduleContainer.appendChild(table);
-
-  } catch (err) {
-    console.error(err);
-    scheduleContainer.innerHTML = 'Error loading candidates.';
-  }
-}
-
-async function saveInterviewSchedule(candidateId, dateStr, timeStr) {
-  try {
-    const res = await apiPost('schedule_interview', {
-      candidateId,
-      scheduledDate: dateStr,
-      scheduledTime: timeStr,
-      notifyStatus: 'PLANNED',
-      candidateResponse: '',
-      reason: ''
-    });
-
-    if (res.success) {
-      alert(`Interview scheduled for ${candidateId} on ${dateStr} at ${timeStr}`);
-    } else {
-      alert('Error: ' + res.error);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Failed to save schedule.');
-  }
-}
-
-function copyInterviewMessage(candidateName, jobTitle, dateStr, timeStr) {
-  const prettyDate = dateStr.split('-').reverse().join('-');
-  const msg =
-`Dear ${candidateName},
-
-We are pleased to inform you that you have been shortlisted for an interview for the position of ${jobTitle || '[Job Title]'}.
-
-Interview Details:
-📍 Location: Near Dr. Gyan Prakash, Kalai Compound, NT Woods, Gandhi Park, Aligarh (202 001)
-📅 Date: ${prettyDate}
-⏰ Time: ${timeStr}
-
-Kindly confirm your availability at your earliest convenience.
-
-For any information or assistance, please feel free to contact us.
-
-Regards
-Team HR
-N.T. Woods Pvt. Ltd.`;
-
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(msg)
-      .then(() => {
-        alert('Interview message copied to clipboard.');
-      })
-      .catch(err => {
-        console.error(err);
-        alert('Could not copy message. Check browser permissions.');
-      });
-  } else {
-    console.log(msg);
-    alert('Clipboard API not available. Message logged in console.');
-  }
-}
-
-/***************************************************
- * HR: Walk-ins (Today, Confirm Call, Appeared → token link)
- ***************************************************/
-function initWalkinsDateToToday() {
-  if (!walkinsDateInput) return;
-  const today = new Date();
-  const iso = today.toISOString().slice(0, 10);
-  walkinsDateInput.value = iso;
-}
-
-btnLoadWalkins && btnLoadWalkins.addEventListener('click', () => {
-  loadWalkinsForSelectedDate();
-});
-
-async function loadWalkinsForSelectedDate() {
-  if (!walkinsDateInput || !walkinsContainer) return;
-  const dateStr = walkinsDateInput.value || new Date().toISOString().slice(0, 10);
-
-  walkinsContainer.innerHTML = 'Loading walk-ins...';
-
-  try {
-    const res = await apiGet('list_walkins', { date: dateStr });
-    if (!res.success) {
-      walkinsContainer.innerHTML = 'Error: ' + res.error;
-      return;
-    }
-
-    const list = res.data || [];
-    if (!list.length) {
-      walkinsContainer.innerHTML = 'No walk-ins scheduled for this date.';
-      return;
-    }
-
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-      <tr>
-        <th>Candidate ID</th>
-        <th>Name</th>
-        <th>Mobile</th>
-        <th>Job Title</th>
-        <th>Date</th>
-        <th>Time</th>
-        <th>Confirmed Call</th>
-        <th>Appeared</th>
-        <th>Actions</th>
-      </tr>
+    container.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Portal</th>
+              <th>Posted?</th>
+              <th>Screenshot URL</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <button id="btnSaveJobPosting" class="mt-8">Save Job Posting Status</button>
     `;
-    table.appendChild(thead);
 
-    const tbody = document.createElement('tbody');
-
-    list.forEach(c => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${c.CandidateId}</td>
-        <td>${c.CandidateName}</td>
-        <td>${c.Mobile}</td>
-        <td>${c.JobTitle || ''}</td>
-        <td>${(c.InterviewDate || '').split('T')[0] || ''}</td>
-        <td>${c.InterviewTime || ''}</td>
-        <td>${c.ConfirmedCall ? 'Yes' : 'No'}</td>
-        <td>${c.Appeared ? 'Yes' : 'No'}</td>
-        <td></td>
-      `;
-      const tdActions = tr.querySelector('td:last-child');
-
-      const btnConfirm = document.createElement('button');
-      btnConfirm.textContent = 'Confirm Call';
-      btnConfirm.style.fontSize = '11px';
-      btnConfirm.style.padding = '4px 6px';
-      btnConfirm.disabled = !!c.ConfirmedCall;
-      btnConfirm.addEventListener('click', () => {
-        updateWalkinCall(c.CandidateId);
-      });
-
-      const btnAppear = document.createElement('button');
-      btnAppear.textContent = 'Mark Appeared & Get Link';
-      btnAppear.style.fontSize = '11px';
-      btnAppear.style.padding = '4px 6px';
-      btnAppear.style.marginLeft = '4px';
-      btnAppear.disabled = !!c.Appeared;
-      btnAppear.addEventListener('click', () => {
-        markWalkinAppeared(c.CandidateId);
-      });
-
-      tdActions.appendChild(btnConfirm);
-      tdActions.appendChild(btnAppear);
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    walkinsContainer.innerHTML = '';
-    walkinsContainer.appendChild(table);
-
+    $('btnSaveJobPosting').addEventListener('click', () => saveJobPosting(reqId));
   } catch (err) {
     console.error(err);
-    walkinsContainer.innerHTML = 'Error loading walk-ins.';
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
   }
 }
 
-async function updateWalkinCall(candidateId) {
-  try {
-    const res = await apiPost('walkin_confirm_call', {
-      candidateId,
-      confirmed: true
-    });
-    if (res.success) {
-      alert('Call confirmed for ' + candidateId);
-      loadWalkinsForSelectedDate();
-    } else {
-      alert('Error: ' + res.error);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Failed to update confirmation.');
-  }
-}
-
-async function markWalkinAppeared(candidateId) {
-  try {
-    const res = await apiPost('walkin_mark_appeared', { candidateId });
-    if (!res.success) {
-      alert('Error: ' + res.error);
-      return;
-    }
-    let formUrl = res.formUrl;
-    const token = res.walkinToken;
-
-    if (!formUrl) {
-      // build default URL based on current origin + walkin_form.html
-      const url = new URL(window.location.href);
-      url.pathname = url.pathname.replace(/index\.html?$/i, 'walkin_form.html');
-      if (!/walkin_form\.html$/i.test(url.pathname)) {
-        // if no index.html in path, just append
-        if (!url.pathname.endsWith('/')) {
-          url.pathname += '/';
-        }
-        url.pathname += 'walkin_form.html';
-      }
-      url.search = `?t=${encodeURIComponent(token)}`;
-      formUrl = url.toString();
-    }
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(formUrl);
-      alert('Walk-in form link copied:\n' + formUrl);
-    } else {
-      alert('Form link:\n' + formUrl);
-      console.log('Walk-in form link:', formUrl);
-    }
-
-    loadWalkinsForSelectedDate();
-  } catch (err) {
-    console.error(err);
-    alert('Failed to mark appeared.');
-  }
-}
-
-/***************************************************
- * Admin / EA: Tests panel (Excel / Tally / Voice)
- ***************************************************/
-btnLoadTests && btnLoadTests.addEventListener('click', async () => {
-  const reqId = testsReqSelect.value;
-  if (!reqId) {
-    alert('Please select requirement.');
-    return;
-  }
-  await loadTestsCandidates(reqId);
-});
-
-async function loadTestsCandidates(reqId) {
-  testsContainer.innerHTML = 'Loading candidates...';
-
-  try {
-    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    if (!res.success) {
-      testsContainer.innerHTML = 'Error: ' + res.error;
-      return;
-    }
-
-    const list = res.data || [];
-    if (!list.length) {
-      testsContainer.innerHTML = 'No candidates found for tests.';
-      return;
-    }
-
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-      <tr>
-        <th>Candidate ID</th>
-        <th>Name</th>
-        <th>Job Role</th>
-        <th>Excel (10)</th>
-        <th>Tally (10)</th>
-        <th>Voice (10)</th>
-        <th>Actions</th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-
-    list.forEach(c => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${c.CandidateId}</td>
-        <td>${c.CandidateName}</td>
-        <td>${c.JobRole || ''}</td>
-        <td><input type="number" class="t-excel" min="0" max="10" style="width:60px;font-size:11px;padding:2px 4px;"></td>
-        <td><input type="number" class="t-tally" min="0" max="10" style="width:60px;font-size:11px;padding:2px 4px;"></td>
-        <td><input type="number" class="t-voice" min="0" max="10" style="width:60px;font-size:11px;padding:2px 4px;"></td>
-        <td></td>
-      `;
-      const tdActions = tr.querySelector('td:last-child');
-      const excelInput = tr.querySelector('.t-excel');
-      const tallyInput = tr.querySelector('.t-tally');
-      const voiceInput = tr.querySelector('.t-voice');
-
-      // prefill if backend sent marks
-      if (typeof c.ExcelMarks10 !== 'undefined' && c.ExcelMarks10 !== '') {
-        excelInput.value = c.ExcelMarks10;
-      }
-      if (typeof c.TallyMarks10 !== 'undefined' && c.TallyMarks10 !== '') {
-        tallyInput.value = c.TallyMarks10;
-      }
-      if (typeof c.VoiceMarks10 !== 'undefined' && c.VoiceMarks10 !== '') {
-        voiceInput.value = c.VoiceMarks10;
-      }
-
-      const btnSave = document.createElement('button');
-      btnSave.textContent = 'Save Marks';
-      btnSave.style.fontSize = '11px';
-      btnSave.style.padding = '4px 6px';
-      btnSave.addEventListener('click', () => {
-        const excelVal = excelInput.value === '' ? null : Number(excelInput.value);
-        const tallyVal = tallyInput.value === '' ? null : Number(tallyInput.value);
-        const voiceVal = voiceInput.value === '' ? null : Number(voiceInput.value);
-
-        if (!validateMarks(excelVal) || !validateMarks(tallyVal) || !validateMarks(voiceVal)) {
-          alert('Marks (if filled) must be between 0 and 10.');
-          return;
-        }
-        updateTestsMarks(c.CandidateId, excelVal, tallyVal, voiceVal);
-      });
-
-      tdActions.appendChild(btnSave);
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    testsContainer.innerHTML = '';
-    testsContainer.appendChild(table);
-
-  } catch (err) {
-    console.error(err);
-    testsContainer.innerHTML = 'Error loading candidates.';
-  }
-}
-
-function validateMarks(v) {
-  if (v === null || typeof v === 'undefined' || Number.isNaN(v)) return true;
-  return v >= 0 && v <= 10;
-}
-
-async function updateTestsMarks(candidateId, excelVal, tallyVal, voiceVal) {
-  try {
-    const res = await apiPost('update_tests', {
-      candidateId,
-      excelMarks10: excelVal,
-      tallyMarks10: tallyVal,
-      voiceMarks10: voiceVal
-    });
-    if (res.success) {
-      alert('Marks updated for ' + candidateId);
-    } else {
-      alert('Error: ' + res.error);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Failed to update marks.');
-  }
-}
-
-/***************************************************
- * PUBLIC: Candidate Walk-in Form (token-based)
- ***************************************************/
-function initWalkinFormIfNeeded() {
-  if (!walkinFormRoot) return;
-
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get('t') || params.get('token');
-  if (!token) {
-    if (wkStatusMsg) wkStatusMsg.textContent = 'Invalid or missing walk-in token.';
-    return;
-  }
-  currentWalkinToken = token;
-  initWalkinForm(token);
-}
-
-async function initWalkinForm(token) {
-  if (!wkStatusMsg) return;
-  wkStatusMsg.textContent = 'Loading your walk-in form...';
-
-  try {
-    const res = await apiGet('walkin_form_init', { walkinToken: token });
-    if (!res.success) {
-      wkStatusMsg.textContent = 'Error: ' + res.error;
-      return;
-    }
-
-    const cand = res.candidate || {};
-    if (wkCandidateNameEl) wkCandidateNameEl.textContent = cand.name || 'Candidate';
-    if (wkJobPostEl) wkJobPostEl.textContent = cand.jobPost || '';
-
-    if (res.alreadySubmitted) {
-      wkStatusMsg.textContent = 'You have already submitted this walk-in form. Thank you.';
-      if (btnWalkinSubmit) btnWalkinSubmit.disabled = true;
-      return;
-    }
-
-    wkStatusMsg.textContent = '';
-
-    // Generate random math questions (d to g -> 4 questions)
-    walkinQuestions = generateMathQuestions(4);
-    if (wkQuestionContainer) {
-      wkQuestionContainer.innerHTML = '';
-      walkinQuestions.forEach((q, idx) => {
-        const row = document.createElement('div');
-        row.style.marginBottom = '8px';
-        row.innerHTML = `
-          <div style="font-size:13px;margin-bottom:2px;">
-            Q${idx + 1}. ${q.q}
-          </div>
-          <input type="number" class="wk-answer" data-index="${idx}" style="max-width:160px;">
-        `;
-        wkQuestionContainer.appendChild(row);
-      });
-    }
-
-    if (btnWalkinSubmit) {
-      btnWalkinSubmit.disabled = false;
-      btnWalkinSubmit.addEventListener('click', submitWalkinFormOnce, { once: true });
-    }
-  } catch (err) {
-    console.error(err);
-    wkStatusMsg.textContent = 'Error loading form.';
-  }
-}
-
-async function submitWalkinFormOnce() {
-  if (!walkinFormRoot || !wkStatusMsg) return;
-
-  const nameInput = document.getElementById('wkInputName');
-  const postInput = document.getElementById('wkInputPost');
-  const sourceInput = document.getElementById('wkInputSource');
-
-  const fullName = nameInput ? nameInput.value.trim() : '';
-  const jobPost  = postInput ? postInput.value.trim() : '';
-  const infoSrc  = sourceInput ? sourceInput.value.trim() : '';
-
-  if (!fullName || !jobPost || !infoSrc) {
-    alert('Please fill Name, Applying For, and Information Source.');
-    btnWalkinSubmit && btnWalkinSubmit.addEventListener('click', submitWalkinFormOnce, { once: true });
-    return;
-  }
-
-  const answerInputs = Array.from(document.querySelectorAll('.wk-answer'));
-  if (!answerInputs.length || answerInputs.length !== walkinQuestions.length) {
-    alert('Something went wrong with questions. Please refresh the page.');
-    return;
-  }
-
-  let correctCount = 0;
-  const answersPayload = [];
-
-  answerInputs.forEach(input => {
-    const idx = Number(input.getAttribute('data-index'));
-    const q = walkinQuestions[idx];
-    const ansVal = Number(input.value);
-    const isCorrect = !Number.isNaN(ansVal) && Math.abs(ansVal - q.a) < 0.01;
-    if (isCorrect) correctCount += 1;
-    answersPayload.push({
-      question: q.q,
-      correctAnswer: q.a,
-      userAnswer: Number.isNaN(ansVal) ? null : ansVal,
-      isCorrect
+async function saveJobPosting(reqId) {
+  const container = $('jobPostingContainer');
+  const rows = container.querySelectorAll('tbody tr');
+  const postings = [];
+  rows.forEach(tr => {
+    const portal = tr.getAttribute('data-portal');
+    const posted = tr.querySelector('.jp-posted').checked;
+    const url = tr.querySelector('.jp-url').value.trim();
+    postings.push({
+      portalName: portal,
+      posted,
+      screenshotUrl: url
     });
   });
 
-  const mathScore10 = Math.round((correctCount / walkinQuestions.length) * 10);
-
-  wkStatusMsg.textContent = 'Submitting your responses...';
-  btnWalkinSubmit.disabled = true;
-
   try {
-    const res = await apiPost('walkin_form_submit', {
-      walkinToken: currentWalkinToken,
-      fullName,
-      jobPost,
-      infoSource: infoSrc,
-      answers: answersPayload,
-      mathScore10
+    await apiPost('save_job_postings', {
+      requirementId: reqId,
+      postings
     });
-
-    if (res.success) {
-      wkStatusMsg.textContent = 'Thank you. Your walk-in form has been submitted.';
-    } else {
-      wkStatusMsg.textContent = 'Error: ' + res.error;
-      btnWalkinSubmit.disabled = false;
-    }
+    alert('Job posting status saved.');
   } catch (err) {
     console.error(err);
-    wkStatusMsg.textContent = 'Failed to submit form.';
-    btnWalkinSubmit.disabled = false;
+    alert('Error: ' + err);
   }
 }
 
-/***************************************************
- * Helper: Random math questions generator
- ***************************************************/
-function generateMathQuestions(count = 4) {
-  const templates = [
-    (n) => ({ q: `${n}% of 200`, a: (n/100)*200 }),
-    (n) => ({ q: `${n}% of 100`, a: (n/100)*100 }),
-    (n) => ({ q: `Half of ${n}`, a: n/2 }),
-    (n) => ({ q: `One third of ${n}`, a: n/3 }),
-    (n) => ({ q: `One fourth of ${n}`, a: n/4 }),
-    (n) => ({ q: `Convert ${n} m into cm`, a: n*100 }),
-  ];
-  const result = [];
-  for (let i = 0; i < count; i++) {
-    const n = 10 + Math.floor(Math.random()*241); // 10-250
-    const t = templates[Math.floor(Math.random()*templates.length)];
-    result.push(t(n));
+// ===== Schedule Interviews =====
+async function loadScheduleInterviews() {
+  const reqId = $('scheduleReqId').value.trim();
+  const container = $('scheduleContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
+
+  if (!reqId) {
+    container.className = 'error mt-12';
+    container.innerText = 'Requirement ID daaliye.';
+    return;
   }
-  return result;
+
+  try {
+    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
+    const list = (res.data || []).filter(c =>
+      ['OWNER_APPROVED_WALKIN', 'SCHEDULED'].includes(c.Status)
+    );
+
+    if (!list.length) {
+      container.className = 'mt-12 muted';
+      container.innerText = 'No candidates for scheduling.';
+      return;
+    }
+
+    container.className = 'mt-12';
+    let rows = '';
+    list.forEach(c => {
+      rows += `
+        <tr data-cid="${htmlEscape(c.CandidateId)}">
+          <td>${htmlEscape(c.CandidateId)}</td>
+          <td>${htmlEscape(c.CandidateName)}</td>
+          <td>${htmlEscape(c.JobRole || '')}</td>
+          <td>${htmlEscape(c.JobTitle || '')}</td>
+          <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
+          <td>
+            <input class="sched-date" type="date" />
+            <input class="sched-time" type="time" />
+            <button class="small btn-save-sched">Save</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    container.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>CandidateId</th>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Interview Date &amp; Time</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    container.querySelectorAll('.btn-save-sched').forEach(btn => {
+      btn.addEventListener('click', () => saveScheduleRow(btn));
+    });
+  } catch (err) {
+    console.error(err);
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
+  }
 }
+
+async function saveScheduleRow(btn) {
+  const tr = btn.closest('tr');
+  const cid = tr.getAttribute('data-cid');
+  const date = tr.querySelector('.sched-date').value;
+  const time = tr.querySelector('.sched-time').value;
+
+  if (!date || !time) {
+    alert('Date & time both required.');
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    await apiPost('schedule_interview', {
+      candidateId: cid,
+      scheduledDate: date,
+      scheduledTime: time
+    });
+    alert('Interview scheduled.');
+  } catch (err) {
+    console.error(err);
+    alert('Error: ' + err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ===== Walk-ins (Today ke Interviews) =====
+async function loadWalkins() {
+  const input = $('walkinDate');
+  if (!input.value) {
+    const today = new Date();
+    input.value = today.toISOString().slice(0, 10);
+  }
+  const dateStr = input.value;
+  const container = $('walkinsContainer');
+  container.className = 'mt-12 loader-text';
+  container.innerText = 'Loading...';
+
+  try {
+    const res = await apiGet('list_walkins', { date: dateStr });
+    const list = res.data || [];
+
+    if (!list.length) {
+      container.className = 'mt-12 muted';
+      container.innerText = 'No interviews for this date.';
+      return;
+    }
+
+    container.className = 'mt-12';
+    let rows = '';
+    list.forEach(c => {
+      const linkCell = `<span class="muted">Click "Appeared" to generate link</span>`;
+      rows += `
+        <tr data-cid="${htmlEscape(c.CandidateId)}">
+          <td>${htmlEscape(c.CandidateId)}</td>
+          <td>${htmlEscape(c.CandidateName)}</td>
+          <td>${htmlEscape(c.Mobile)}</td>
+          <td>${htmlEscape(c.JobRole || '')}</td>
+          <td>${htmlEscape(c.JobTitle || '')}</td>
+          <td>${htmlEscape(c.InterviewTime || '')}</td>
+          <td>
+            <input type="checkbox" class="w-conf" ${c.ConfirmedCall ? 'checked' : ''} />
+          </td>
+          <td>
+            <button class="small btn-mark-appeared">Appeared</button>
+          </td>
+          <td class="walkin-link-cell">${linkCell}</td>
+        </tr>
+      `;
+    });
+
+    container.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>CandidateId</th>
+              <th>Name</th>
+              <th>Mobile</th>
+              <th>Role</th>
+              <th>Title</th>
+              <th>Time</th>
+              <th>Confirm Call</th>
+              <th>Appeared</th>
+              <th>Walk-in Link</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    container.querySelectorAll('.w-conf').forEach(chk => {
+      chk.addEventListener('change', () => saveWalkinConfirm(chk));
+    });
+    container.querySelectorAll('.btn-mark-appeared').forEach(btn => {
+      btn.addEventListener('click', () => markWalkinAppeared(btn));
+    });
+  } catch (err) {
+    console.error(err);
+    container.className = 'error mt-12';
+    container.innerText = 'Error: ' + err;
+  }
+}
+
+async function saveWalkinConfirm(chk) {
+  const tr = chk.closest('tr');
+  const cid = tr.getAttribute('data-cid');
+  const confirmed = chk.checked;
+
+  try {
+    await apiPost('walkin_confirm_call', {
+      candidateId: cid,
+      confirmed
+    });
+  } catch (err) {
+    console.error(err);
+    alert('Error: ' + err);
+    chk.checked = !confirmed;
+  }
+}
+
+async function markWalkinAppeared(btn) {
+  const tr = btn.closest('tr');
+  const cid = tr.getAttribute('data-cid');
+  const linkCell = tr.querySelector('.walkin-link-cell');
+
+  btn.disabled = true;
+  linkCell.innerHTML = '<span class="loader-text">Generating...</span>';
+  try {
+    const res = await apiPost('walkin_mark_appeared', { candidateId: cid });
+    const token = res.walkinToken;
+    const link = `${WALKIN_FORM_URL}?walkinToken=${encodeURIComponent(token)}`;
+    linkCell.innerHTML = `<a href="${link}" target="_blank" class="link">Open Walk-in Form</a>`;
+  } catch (err) {
+    console.error(err);
+    linkCell.innerHTML = '<span class="error">Error generating link.</span>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ===== Tests Panel =====
+async function saveTests() {
+  const cid = $('testCandidateId').value.trim();
+  const excel = $('testExcelMarks').value;
+  const tally = $('testTallyMarks').value;
+  const voice = $('testVoiceMarks').value;
+  const msgEl = $('testPanelMsg');
+
+  msgEl.className = '';
+  msgEl.innerText = '';
+
+  if (!cid) {
+    msgEl.className = 'error';
+    msgEl.innerText = 'Candidate ID required.';
+    return;
+  }
+
+  const data = { candidateId: cid };
+  if (excel !== '') data.excelMarks10 = Number(excel);
+  if (tally !== '') data.tallyMarks10 = Number(tally);
+  if (voice !== '') data.voiceMarks10 = Number(voice);
+
+  try {
+    $('btnSaveTests').disabled = true;
+    const res = await apiPost('update_tests', data);
+    msgEl.className = 'success';
+    msgEl.innerText = 'Marks updated.';
+  } catch (err) {
+    console.error(err);
+    msgEl.className = 'error';
+    msgEl.innerText = 'Error: ' + err;
+  } finally {
+    $('btnSaveTests').disabled = false;
+  }
+}
+
+// ===== Wire Events =====
+function wireAllButtons() {
+  $('btnSignOut').addEventListener('click', () => {
+    // simple sign-out (front-end level)
+    currentUser = null;
+    idToken = null;
+    location.reload();
+  });
+
+  // EA
+  const loadTplBtn = $('btnLoadTemplate');
+  if (loadTplBtn) loadTplBtn.addEventListener('click', applyTemplateForSelectedRole);
+  const saveReqBtn = $('btnSaveRequirement');
+  if (saveReqBtn) saveReqBtn.addEventListener('click', saveRequirementEA);
+  const refreshEAReqBtn = $('btnRefreshEARequirements');
+  if (refreshEAReqBtn) refreshEAReqBtn.addEventListener('click', loadEARequirementsView);
+
+  // HR
+  const refreshHRReqBtn = $('btnRefreshHRRequirements');
+  if (refreshHRReqBtn) refreshHRReqBtn.addEventListener('click', loadHRRequirements);
+
+  const uploadBtn = $('btnUploadCVs');
+  if (uploadBtn) uploadBtn.addEventListener('click', uploadCVs);
+
+  const loadShortlistBtn = $('btnLoadShortlist');
+  if (loadShortlistBtn) loadShortlistBtn.addEventListener('click', loadShortlisting);
+
+  const loadCallScreenBtn = $('btnLoadCallScreen');
+  if (loadCallScreenBtn) loadCallScreenBtn.addEventListener('click', loadCallScreening);
+
+  const loadOwnerBtn = $('btnLoadOwnerDiscuss');
+  if (loadOwnerBtn) loadOwnerBtn.addEventListener('click', loadOwnerDiscuss);
+
+  const loadPostingBtn = $('btnLoadJobPosting');
+  if (loadPostingBtn) loadPostingBtn.addEventListener('click', loadJobPosting);
+
+  const loadScheduleBtn = $('btnLoadSchedule');
+  if (loadScheduleBtn) loadScheduleBtn.addEventListener('click', loadScheduleInterviews);
+
+  const loadWalkinsBtn = $('btnLoadWalkins');
+  if (loadWalkinsBtn) loadWalkinsBtn.addEventListener('click', loadWalkins);
+
+  // Tests
+  const saveTestsBtn = $('btnSaveTests');
+  if (saveTestsBtn) saveTestsBtn.addEventListener('click', saveTests);
+}
+
+// ===== Boot =====
+window.onload = function () {
+  initGoogleLogin();
+};
