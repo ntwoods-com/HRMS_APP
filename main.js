@@ -2,9 +2,9 @@
  * main.js - Single Frontend JS File
  * - Google OAuth (GIS) login
  * - Simple API client
- * - Role-based tiles & basic Phase-1 UIs:
+ * - Role-based tiles & Phase-1 UIs:
  *   EA: Raise Requirement
- *   HR: Review Requirements (Valid / Send Back)
+ *   HR: Review Requirements, Upload CVs, Shortlisting, Call Screening
  ***************************************************/
 
 // CONFIG
@@ -36,6 +36,7 @@ const btnCreateReq    = document.getElementById('btnCreateRequirement');
 // HR panel refs
 const panelReqListHR  = document.getElementById('panelReqListHR');
 const reqListContainer= document.getElementById('reqListContainer');
+
 // HR extra panels
 const panelUploadCVsHR   = document.getElementById('panelUploadCVsHR');
 const panelShortlistHR   = document.getElementById('panelShortlistHR');
@@ -69,6 +70,7 @@ const btnSaveCallDetails = document.getElementById('btnSaveCallDetails');
 let hrReqCache = [];
 // currently selected candidate for call screening
 let currentCallCandId = null;
+
 /***************************************************
  * Google Identity Services - init
  ***************************************************/
@@ -128,7 +130,6 @@ async function apiPost(action, data = {}) {
   };
   const res = await fetch(API_BASE_URL, {
     method: 'POST',
-    MODE: 'no-cors'
     headers: {
       'Content-Type': 'application/json'
     },
@@ -170,20 +171,41 @@ function logout() {
 function renderRoleTiles() {
   roleTilesEl.innerHTML = '';
 
+  // EA tiles
   if (currentUser.role === 'EA' || currentUser.role === 'ADMIN') {
     addTile('Raise Requirement', 'Create new hiring requirements', () => {
       showPanel('EA_REQUIREMENT');
     });
   }
 
+  // HR tiles
   if (currentUser.role === 'HR' || currentUser.role === 'ADMIN') {
     addTile('Review Requirements', 'Validate or send back requirements', () => {
       showPanel('HR_REQUIREMENT_REVIEW');
       loadRequirementsForHR();
     });
+
+    addTile('Upload CVs', 'Batch upload CVs for a requirement', () => {
+      showPanel('HR_UPLOAD_CVS');
+      ensureHRReqDropdowns();
+    });
+
+    addTile('Shortlisting', 'First glance approve / reject CVs', () => {
+      showPanel('HR_SHORTLIST');
+      ensureHRReqDropdowns();
+    });
+
+    addTile('Call Screening', 'On-call discussion & scoring', () => {
+      showPanel('HR_CALL_SCREEN');
+      ensureHRReqDropdowns();
+    });
   }
 
-  // Future: more tiles e.g. Shortlisting, Call Screening, Owner Discussion, etc.
+  // Future:
+  // addTile('Owner Discussion', ...)
+  // addTile('Schedule Interviews', ...)
+  // addTile('Walk-ins', ...)
+  // addTile('Tests', ...)
 }
 
 function addTile(title, sub, onClick) {
@@ -198,8 +220,12 @@ function addTile(title, sub, onClick) {
 }
 
 function showPanel(panelKey) {
+  // hide all
   panelRequirementsEA.classList.add('hidden');
   panelReqListHR.classList.add('hidden');
+  panelUploadCVsHR.classList.add('hidden');
+  panelShortlistHR.classList.add('hidden');
+  panelCallScreenHR.classList.add('hidden');
 
   switch (panelKey) {
     case 'EA_REQUIREMENT':
@@ -207,6 +233,15 @@ function showPanel(panelKey) {
       break;
     case 'HR_REQUIREMENT_REVIEW':
       panelReqListHR.classList.remove('hidden');
+      break;
+    case 'HR_UPLOAD_CVS':
+      panelUploadCVsHR.classList.remove('hidden');
+      break;
+    case 'HR_SHORTLIST':
+      panelShortlistHR.classList.remove('hidden');
+      break;
+    case 'HR_CALL_SCREEN':
+      panelCallScreenHR.classList.remove('hidden');
       break;
   }
 }
@@ -305,6 +340,39 @@ btnCreateReq.addEventListener('click', async () => {
 });
 
 /***************************************************
+ * HR Requirements cache helpers
+ ***************************************************/
+function fillHRReqDropdowns() {
+  const selects = [uploadReqSelect, shortlistReqSelect, callReqSelect];
+  selects.forEach(sel => {
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select Requirement</option>';
+    hrReqCache.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.RequirementId;
+      opt.textContent = `${r.RequirementId} · ${r.JobRole} · ${r.JobTitle}`;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+async function ensureHRReqDropdowns() {
+  if (hrReqCache.length) {
+    fillHRReqDropdowns();
+    return;
+  }
+  try {
+    const res = await apiGet('list_requirements');
+    if (res.success) {
+      hrReqCache = res.data || [];
+      fillHRReqDropdowns();
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/***************************************************
  * HR: Review Requirements (Valid / Send Back)
  ***************************************************/
 async function loadRequirementsForHR() {
@@ -320,6 +388,9 @@ async function loadRequirementsForHR() {
     }
 
     const rows = res.data || [];
+    hrReqCache = rows;
+    fillHRReqDropdowns();
+
     if (!rows.length) {
       reqListContainer.innerHTML = 'No requirements found.';
       return;
@@ -408,6 +479,319 @@ async function hrUpdateRequirementStatus(requirementId, status, remark='') {
 }
 
 /***************************************************
+ * HR: Upload CVs (batch)
+ ***************************************************/
+btnUploadCVs && btnUploadCVs.addEventListener('click', async () => {
+  const reqId = uploadReqSelect.value;
+  if (!reqId) {
+    alert('Please select a requirement.');
+    return;
+  }
+
+  const raw = cvListInput.value.trim();
+  if (!raw) {
+    alert('Please paste CV list (FileName, FileURL) line by line.');
+    return;
+  }
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) {
+    alert('No valid lines found.');
+    return;
+  }
+
+  const files = [];
+  for (const line of lines) {
+    const parts = line.split(',');
+    if (parts.length < 2) continue;
+    const fileName = parts[0].trim();
+    const fileUrl  = parts.slice(1).join(',').trim();
+    if (!fileName || !fileUrl) continue;
+    files.push({ fileName, fileUrl });
+  }
+
+  if (!files.length) {
+    alert('No valid "FileName, FileURL" entries parsed.');
+    return;
+  }
+
+  cvUploadProgress.textContent = `Uploading ${files.length} CVs...`;
+  btnUploadCVs.disabled = true;
+
+  try {
+    const res = await apiPost('batch_upload_cvs', {
+      requirementId: reqId,
+      files
+    });
+
+    if (res.success) {
+      cvUploadProgress.textContent = `Uploaded ${files.length} CVs successfully. Candidates: ${
+        (res.candidates || []).join(', ')
+      }`;
+      cvListInput.value = '';
+    } else {
+      cvUploadProgress.textContent = 'Error: ' + res.error;
+    }
+  } catch (err) {
+    console.error(err);
+    cvUploadProgress.textContent = 'Error uploading CVs.';
+  } finally {
+    btnUploadCVs.disabled = false;
+  }
+});
+
+/***************************************************
+ * HR: Shortlisting
+ ***************************************************/
+btnLoadShortlist && btnLoadShortlist.addEventListener('click', async () => {
+  const reqId = shortlistReqSelect.value;
+  if (!reqId) {
+    alert('Please select requirement.');
+    return;
+  }
+  await loadShortlistCandidates(reqId);
+});
+
+async function loadShortlistCandidates(reqId) {
+  shortlistTableContainer.innerHTML = 'Loading candidates...';
+  try {
+    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
+    if (!res.success) {
+      shortlistTableContainer.innerHTML = 'Error: ' + res.error;
+      return;
+    }
+
+    const list = (res.data || []).filter(c =>
+      c.Status === 'UPLOADED' || c.Status === 'SHORTLISTED'
+    );
+    if (!list.length) {
+      shortlistTableContainer.innerHTML = 'No CVs found for shortlisting.';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+      <tr>
+        <th>Candidate ID</th>
+        <th>Name</th>
+        <th>Mobile</th>
+        <th>Source</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    list.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${c.CandidateId}</td>
+        <td>${c.CandidateName}</td>
+        <td>${c.Mobile}</td>
+        <td>${c.Source}</td>
+        <td><span class="badge">${c.Status}</span></td>
+        <td></td>
+      `;
+      const tdActions = tr.querySelector('td:last-child');
+
+      const btnApprove = document.createElement('button');
+      btnApprove.textContent = 'Approve';
+      btnApprove.style.fontSize = '11px';
+      btnApprove.style.padding = '4px 6px';
+      btnApprove.addEventListener('click', () => {
+        shortlistDecision(c.CandidateId, 'APPROVE');
+      });
+
+      const btnReject = document.createElement('button');
+      btnReject.textContent = 'Reject';
+      btnReject.style.fontSize = '11px';
+      btnReject.style.padding = '4px 6px';
+      btnReject.style.marginLeft = '4px';
+      btnReject.addEventListener('click', () => {
+        const remark = prompt('Rejection remark (Shortlisting):');
+        if (remark !== null) {
+          shortlistDecision(c.CandidateId, 'REJECT', remark);
+        }
+      });
+
+      tdActions.appendChild(btnApprove);
+      tdActions.appendChild(btnReject);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    shortlistTableContainer.innerHTML = '';
+    shortlistTableContainer.appendChild(table);
+
+  } catch (err) {
+    console.error(err);
+    shortlistTableContainer.innerHTML = 'Error loading candidates.';
+  }
+}
+
+async function shortlistDecision(candidateId, decision, remark='') {
+  try {
+    const res = await apiPost('shortlist_decision', {
+      candidateId,
+      decision,
+      remark
+    });
+    if (res.success) {
+      alert(`Updated ${candidateId} → ${decision}`);
+      const reqId = shortlistReqSelect.value;
+      if (reqId) {
+        loadShortlistCandidates(reqId);
+      }
+    } else {
+      alert('Error: ' + res.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Failed to update decision.');
+  }
+}
+
+/***************************************************
+ * HR: Call Screening
+ ***************************************************/
+btnLoadCallList && btnLoadCallList.addEventListener('click', async () => {
+  const reqId = callReqSelect.value;
+  if (!reqId) {
+    alert('Please select requirement.');
+    return;
+  }
+  await loadCallScreenCandidates(reqId);
+});
+
+async function loadCallScreenCandidates(reqId) {
+  callListContainer.innerHTML = 'Loading candidates...';
+  callEditor.classList.add('hidden');
+  currentCallCandId = null;
+
+  try {
+    const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
+    if (!res.success) {
+      callListContainer.innerHTML = 'Error: ' + res.error;
+      return;
+    }
+
+    const list = (res.data || []).filter(c => c.Status === 'SHORTLISTED');
+    if (!list.length) {
+      callListContainer.innerHTML = 'No candidates for call screening.';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+      <tr>
+        <th>Candidate ID</th>
+        <th>Name</th>
+        <th>Mobile</th>
+        <th>Source</th>
+        <th>Open</th>
+      </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    list.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${c.CandidateId}</td>
+        <td>${c.CandidateName}</td>
+        <td>${c.Mobile}</td>
+        <td>${c.Source}</td>
+        <td></td>
+      `;
+      const tdOpen = tr.querySelector('td:last-child');
+      const btnOpen = document.createElement('button');
+      btnOpen.textContent = 'Open';
+      btnOpen.style.fontSize = '11px';
+      btnOpen.style.padding = '4px 6px';
+      btnOpen.addEventListener('click', () => {
+        openCallEditor(c);
+      });
+      tdOpen.appendChild(btnOpen);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    callListContainer.innerHTML = '';
+    callListContainer.appendChild(table);
+
+  } catch (err) {
+    console.error(err);
+    callListContainer.innerHTML = 'Error loading candidates.';
+  }
+}
+
+function openCallEditor(candidate) {
+  currentCallCandId = candidate.CandidateId;
+  callCandName.textContent = `${candidate.CandidateName} (${candidate.Mobile})`;
+  callFamilyNotes.value = '';
+  callStatusSelect.value = '';
+  callComm10.value = '';
+  callExp10.value = '';
+  callRemark.value = '';
+  callEditor.classList.remove('hidden');
+}
+
+btnSaveCallDetails && btnSaveCallDetails.addEventListener('click', async () => {
+  if (!currentCallCandId) {
+    alert('No candidate selected.');
+    return;
+  }
+
+  const familyNotes = callFamilyNotes.value.trim();
+  const callStatus  = callStatusSelect.value;
+  const comm10      = callComm10.value;
+  const exp10       = callExp10.value;
+  const remark      = callRemark.value.trim();
+
+  if (!callStatus) {
+    alert('Please select Call Status.');
+    return;
+  }
+
+  const cVal = Number(comm10);
+  const eVal = Number(exp10);
+  if (isNaN(cVal) || isNaN(eVal) || cVal < 0 || cVal > 10 || eVal < 0 || eVal > 10) {
+    alert('Marks should be between 0 and 10.');
+    return;
+  }
+
+  try {
+    const res = await apiPost('call_screening_update', {
+      candidateId: currentCallCandId,
+      familyNotes,
+      callStatus,
+      communication10: cVal,
+      experience10: eVal,
+      hrRemark: remark
+    });
+
+    if (res.success) {
+      alert('Call details saved.');
+      const reqId = callReqSelect.value;
+      if (reqId) {
+        loadCallScreenCandidates(reqId);
+      }
+      callEditor.classList.add('hidden');
+      currentCallCandId = null;
+    } else {
+      alert('Error: ' + res.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Failed to save call details.');
+  }
+});
+
+/***************************************************
  * Helper: Random math questions generator (for Walkin form later)
  ***************************************************/
 function generateMathQuestions(count = 4) {
@@ -430,7 +814,6 @@ function generateMathQuestions(count = 4) {
 
 // Future:
 // - Walkin form front-end (separate HTML or dynamic modal using token)
-// - Shortlisting list UI (Approve/Reject with remark)
-// - Call screening UI with predefined questions & scoring
 // - Owner discussion panel & schedule interviews UI
+// - Walk-ins tile (Today filter + token link)
 // - Tests entry UI (for Admin/EA) etc.
