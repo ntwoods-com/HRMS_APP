@@ -1,0 +1,403 @@
+/***************************************************
+ * main.js - Single Frontend JS File
+ * - Google OAuth (GIS) login
+ * - Simple API client
+ * - Role-based tiles & basic Phase-1 UIs:
+ *   EA: Raise Requirement
+ *   HR: Review Requirements (Valid / Send Back)
+ ***************************************************/
+
+// CONFIG
+const API_BASE_URL = 'PASTE_YOUR_WEBAPP_URL_HERE'; // e.g. https://script.google.com/macros/s/AKfycb.../exec
+const GOOGLE_CLIENT_ID = 'PASTE_YOUR_GOOGLE_CLIENT_ID_HERE';
+
+let currentUser = null;
+let idToken = null;
+let jobTemplatesCache = [];
+
+// DOM refs
+const loginSection = document.getElementById('loginSection');
+const appSection   = document.getElementById('appSection');
+const userInfoEl   = document.getElementById('userInfo');
+const roleTilesEl  = document.getElementById('roleTiles');
+
+// EA panel refs
+const panelRequirementsEA = document.getElementById('panelRequirementsEA');
+const reqJobRole      = document.getElementById('reqJobRole');
+const reqJobTitle     = document.getElementById('reqJobTitle');
+const reqResp         = document.getElementById('reqResponsibilities');
+const reqMust         = document.getElementById('reqMustHave');
+const reqShift        = document.getElementById('reqShift');
+const reqPay          = document.getElementById('reqPayScale');
+const reqPerks        = document.getElementById('reqPerks');
+const reqNotes        = document.getElementById('reqNotes');
+const btnCreateReq    = document.getElementById('btnCreateRequirement');
+
+// HR panel refs
+const panelReqListHR  = document.getElementById('panelReqListHR');
+const reqListContainer= document.getElementById('reqListContainer');
+
+/***************************************************
+ * Google Identity Services - init
+ ***************************************************/
+window.onload = function () {
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleCredentialResponse
+    });
+    google.accounts.id.renderButton(
+      document.getElementById("g_id_signin"),
+      { theme: "outline", size: "large" }
+    );
+  } else {
+    console.error('Google Identity Services not loaded');
+  }
+};
+
+function handleCredentialResponse(response) {
+  // response.credential = ID Token
+  idToken = response.credential;
+  // Call backend /me to get user with role
+  apiGet('me')
+    .then(res => {
+      if (res.success) {
+        currentUser = res.user;
+        onLoginSuccess();
+      } else {
+        alert('Access denied: ' + (res.error || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Login failed. Please contact MIS.');
+    });
+}
+
+/***************************************************
+ * API Helpers
+ ***************************************************/
+async function apiGet(action, params = {}) {
+  params.action = action;
+  if (idToken) {
+    params.idToken = idToken;
+  }
+  const query = new URLSearchParams(params).toString();
+  const url = `${API_BASE_URL}?${query}`;
+  const res = await fetch(url);
+  return res.json();
+}
+
+async function apiPost(action, data = {}) {
+  const body = {
+    action,
+    idToken,
+    data
+  };
+  const res = await fetch(API_BASE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+/***************************************************
+ * Login success: show role-specific UI
+ ***************************************************/
+function onLoginSuccess() {
+  loginSection.classList.add('hidden');
+  appSection.classList.remove('hidden');
+
+  userInfoEl.innerHTML = `
+    <span style="font-size:12px;">${currentUser.name} (${currentUser.role})</span>
+    <button style="font-size:11px;margin-left:8px;padding:4px 8px;border-radius:999px;" onclick="logout()">Logout</button>
+  `;
+
+  renderRoleTiles();
+  if (currentUser.role === 'EA' || currentUser.role === 'ADMIN') {
+    loadJobTemplates();
+  }
+  if (currentUser.role === 'HR' || currentUser.role === 'ADMIN') {
+    loadRequirementsForHR();
+  }
+}
+
+function logout() {
+  idToken = null;
+  currentUser = null;
+  location.reload();
+}
+
+/***************************************************
+ * Tiles (module selector)
+ ***************************************************/
+function renderRoleTiles() {
+  roleTilesEl.innerHTML = '';
+
+  if (currentUser.role === 'EA' || currentUser.role === 'ADMIN') {
+    addTile('Raise Requirement', 'Create new hiring requirements', () => {
+      showPanel('EA_REQUIREMENT');
+    });
+  }
+
+  if (currentUser.role === 'HR' || currentUser.role === 'ADMIN') {
+    addTile('Review Requirements', 'Validate or send back requirements', () => {
+      showPanel('HR_REQUIREMENT_REVIEW');
+      loadRequirementsForHR();
+    });
+  }
+
+  // Future: more tiles e.g. Shortlisting, Call Screening, Owner Discussion, etc.
+}
+
+function addTile(title, sub, onClick) {
+  const div = document.createElement('div');
+  div.className = 'tile';
+  div.innerHTML = `
+    <div class="tile-title">${title}</div>
+    <div class="tile-sub">${sub}</div>
+  `;
+  div.addEventListener('click', onClick);
+  roleTilesEl.appendChild(div);
+}
+
+function showPanel(panelKey) {
+  panelRequirementsEA.classList.add('hidden');
+  panelReqListHR.classList.add('hidden');
+
+  switch (panelKey) {
+    case 'EA_REQUIREMENT':
+      panelRequirementsEA.classList.remove('hidden');
+      break;
+    case 'HR_REQUIREMENT_REVIEW':
+      panelReqListHR.classList.remove('hidden');
+      break;
+  }
+}
+
+/***************************************************
+ * EA: Job Templates & Create Requirement
+ ***************************************************/
+async function loadJobTemplates() {
+  try {
+    const res = await apiGet('get_job_templates');
+    if (res.success) {
+      jobTemplatesCache = res.data || [];
+      fillJobRoleDropdown();
+    } else {
+      console.error(res.error);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function fillJobRoleDropdown() {
+  reqJobRole.innerHTML = '<option value="">Select Job Role</option>';
+  jobTemplatesCache.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.JobRole;
+    opt.textContent = t.JobRole;
+    reqJobRole.appendChild(opt);
+  });
+
+  reqJobRole.addEventListener('change', () => {
+    const role = reqJobRole.value;
+    const template = jobTemplatesCache.find(t => t.JobRole === role);
+    if (template) {
+      reqJobTitle.value = template.JobTitleDefault || '';
+      reqResp.value     = template.ResponsibilitiesDefault || '';
+      reqMust.value     = template.MustHaveDefault || '';
+      reqShift.value    = template.ShiftDefault || '';
+      reqPay.value      = template.PayScaleDefault || '';
+      reqPerks.value    = template.PerksDefault || '';
+      reqNotes.value    = template.NotesDefault || '';
+    } else {
+      // clear if no template
+      reqJobTitle.value = '';
+      reqResp.value = '';
+      reqMust.value = '';
+      reqShift.value = '';
+      reqPay.value = '';
+      reqPerks.value = '';
+      reqNotes.value = '';
+    }
+  });
+}
+
+btnCreateReq.addEventListener('click', async () => {
+  if (!reqJobRole.value) {
+    alert('Please select Job Role');
+    return;
+  }
+  btnCreateReq.disabled = true;
+  btnCreateReq.textContent = 'Creating...';
+
+  try {
+    const payload = {
+      jobRole: reqJobRole.value,
+      jobTitle: reqJobTitle.value,
+      responsibilities: reqResp.value,
+      mustHave: reqMust.value,
+      shift: reqShift.value,
+      payScale: reqPay.value,
+      perks: reqPerks.value,
+      notes: reqNotes.value
+    };
+    const res = await apiPost('create_requirement', payload);
+    if (res.success) {
+      alert('Requirement created: ' + res.requirementId);
+      // Reset form
+      reqJobRole.value = '';
+      reqJobTitle.value = '';
+      reqResp.value = '';
+      reqMust.value = '';
+      reqShift.value = '';
+      reqPay.value = '';
+      reqPerks.value = '';
+      reqNotes.value = '';
+    } else {
+      alert('Error: ' + res.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error creating requirement');
+  } finally {
+    btnCreateReq.disabled = false;
+    btnCreateReq.textContent = 'Create Requirement';
+  }
+});
+
+/***************************************************
+ * HR: Review Requirements (Valid / Send Back)
+ ***************************************************/
+async function loadRequirementsForHR() {
+  if (!(currentUser.role === 'HR' || currentUser.role === 'ADMIN')) return;
+
+  reqListContainer.innerHTML = 'Loading requirements...';
+
+  try {
+    const res = await apiGet('list_requirements');
+    if (!res.success) {
+      reqListContainer.innerHTML = 'Error: ' + res.error;
+      return;
+    }
+
+    const rows = res.data || [];
+    if (!rows.length) {
+      reqListContainer.innerHTML = 'No requirements found.';
+      return;
+    }
+
+    // simple table
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+      <tr>
+        <th>ID</th>
+        <th>Job Role</th>
+        <th>Job Title</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.RequirementId}</td>
+        <td>${r.JobRole}</td>
+        <td>${r.JobTitle}</td>
+        <td><span class="badge">${r.Status || ''}</span></td>
+        <td></td>
+      `;
+      const tdActions = tr.querySelector('td:last-child');
+
+      const btnValid = document.createElement('button');
+      btnValid.textContent = 'Valid';
+      btnValid.style.fontSize = '11px';
+      btnValid.style.padding = '4px 6px';
+      btnValid.addEventListener('click', () => {
+        hrUpdateRequirementStatus(r.RequirementId, 'VALID');
+      });
+
+      const btnSendBack = document.createElement('button');
+      btnSendBack.textContent = 'Send Back';
+      btnSendBack.style.fontSize = '11px';
+      btnSendBack.style.padding = '4px 6px';
+      btnSendBack.style.marginLeft = '4px';
+      btnSendBack.addEventListener('click', () => {
+        const remark = prompt('Send-back remark for EA:');
+        if (remark !== null) {
+          hrUpdateRequirementStatus(r.RequirementId, 'SEND_BACK', remark);
+        }
+      });
+
+      tdActions.appendChild(btnValid);
+      tdActions.appendChild(btnSendBack);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    reqListContainer.innerHTML = '';
+    reqListContainer.appendChild(table);
+
+  } catch (err) {
+    console.error(err);
+    reqListContainer.innerHTML = 'Error loading requirements.';
+  }
+}
+
+async function hrUpdateRequirementStatus(requirementId, status, remark='') {
+  try {
+    const res = await apiPost('update_requirement_status', {
+      requirementId,
+      status,
+      hrRemark: remark
+    });
+    if (res.success) {
+      alert('Updated: ' + requirementId + ' → ' + status);
+      loadRequirementsForHR();
+    } else {
+      alert('Error: ' + res.error);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Failed to update requirement');
+  }
+}
+
+/***************************************************
+ * Helper: Random math questions generator (for Walkin form later)
+ ***************************************************/
+function generateMathQuestions(count = 4) {
+  const templates = [
+    (n) => ({ q: `${n}% of 200`, a: (n/100)*200 }),
+    (n) => ({ q: `${n}% of 100`, a: (n/100)*100 }),
+    (n) => ({ q: `Half of ${n}`, a: n/2 }),
+    (n) => ({ q: `One third of ${n}`, a: n/3 }),
+    (n) => ({ q: `One fourth of ${n}`, a: n/4 }),
+    (n) => ({ q: `Convert ${n} m into cm`, a: n*100 }),
+  ];
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    const n = 10 + Math.floor(Math.random()*241); // 10-250
+    const t = templates[Math.floor(Math.random()*templates.length)];
+    result.push(t(n));
+  }
+  return result;
+}
+
+// Future:
+// - Walkin form front-end (separate HTML or dynamic modal using token)
+// - Shortlisting list UI (Approve/Reject with remark)
+// - Call screening UI with predefined questions & scoring
+// - Owner discussion panel & schedule interviews UI
+// - Tests entry UI (for Admin/EA) etc.
