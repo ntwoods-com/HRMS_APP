@@ -4,127 +4,301 @@
   <meta charset="UTF-8" />
   <title>NT Woods Walk-in Form</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
   <style>
-    * {
-      box-sizing: border-box;
-    }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
-      background: #0f172a;
+      background: #f5f7fb;
       color: #0f172a;
     }
-    .wrapper {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .card {
+    .container {
+      max-width: 600px;
+      margin: 24px auto;
       background: #ffffff;
-      border-radius: 16px;
-      max-width: 480px;
-      width: 100%;
-      box-shadow: 0 10px 30px rgba(15,23,42,0.35);
-      padding: 18px 18px 20px;
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
     }
     h1 {
-      margin: 0 0 4px;
-      font-size: 18px;
-      font-weight: 700;
-      text-align: center;
-    }
-    .sub {
+      font-size: 20px;
       margin: 0 0 12px;
-      font-size: 12px;
-      text-align: center;
-      color: #64748b;
+    }
+    p {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: #4b5563;
     }
     label {
       display: block;
-      font-size: 12px;
-      margin-top: 8px;
-      margin-bottom: 2px;
-    }
-    input, textarea, button {
+      margin-top: 10px;
+      margin-bottom: 4px;
       font-size: 13px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      border: 1px solid #cbd5e1;
-      width: 100%;
-      font-family: inherit;
+      font-weight: 500;
     }
-    textarea {
-      resize: vertical;
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #cbd5f5;
+      font-size: 13px;
+      outline: none;
+    }
+    input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px #bfdbfe;
     }
     button {
       border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 14px;
       background: #2563eb;
-      color: #fff;
+      color: #eff6ff;
       cursor: pointer;
-      margin-top: 12px;
+      margin-top: 14px;
     }
-    button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-    .status {
+    .muted {
       font-size: 12px;
-      margin-top: 10px;
-      color: #0f172a;
+      color: #6b7280;
     }
-    .badge-job {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 999px;
-      background: #eff6ff;
-      color: #1d4ed8;
-      font-size: 11px;
-      margin-bottom: 4px;
+    .error {
+      color: #b91c1c;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .success {
+      color: #166534;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .q-item {
+      margin-top: 8px;
     }
   </style>
 </head>
 <body>
-
-<div class="wrapper">
-  <div class="card" id="walkinFormRoot">
+  <div class="container">
     <h1>Walk-in Form</h1>
-    <p class="sub">
-      N.T. Woods Pvt. Ltd. – Please fill this short form before your interview.
+    <p id="introText" class="muted">
+      Loading details...
     </p>
 
-    <div style="margin-bottom:8px;">
-      <div style="font-size:13px;font-weight:600;">
-        Welcome, <span id="wkCandidateName">Candidate</span>
-      </div>
-      <div id="wkJobPost" class="badge-job"></div>
+    <div id="formSection" style="display:none;">
+      <label for="fullName">Your Full Name</label>
+      <input id="fullName" type="text" />
+
+      <label for="jobPost">Applying For (Job Post)</label>
+      <input id="jobPost" type="text" />
+
+      <label for="infoSource">Where did you get info about this job?</label>
+      <input id="infoSource" type="text" placeholder="Naukri / Indeed / Apna / Friend / Others..." />
+
+      <h3 style="margin-top:16px; font-size:15px;">Quick Math Check</h3>
+      <p class="muted">
+        Neeche 4 chhote math questions hain, please honestly attempt karein.  
+        Ye sirf basic aptitude check ke liye hai.
+      </p>
+      <div id="questionsContainer"></div>
+
+      <button id="btnSubmit">Submit</button>
+      <div id="msg" class="mt-8"></div>
     </div>
-
-    <label>Your Full Name</label>
-    <input id="wkInputName" placeholder="Enter your full name" />
-
-    <label>Applying For (Job Post)</label>
-    <input id="wkInputPost" placeholder="e.g. CRM, CCE, Junior Accountant" />
-
-    <label>Where did you get information about this job?</label>
-    <input id="wkInputSource" placeholder="e.g. Naukri, Indeed, Apna, Reference etc." />
-
-    <div style="margin-top:10px;font-size:13px;font-weight:600;">
-      Quick Math Questions
-    </div>
-    <p style="font-size:11px;color:#64748b;margin-top:2px;">
-      Please answer the following basic questions. Ye sirf aapki basic calculation samajhne ke liye hai.
-    </p>
-
-    <div id="wkQuestionContainer"></div>
-
-    <button id="btnWalkinSubmit" disabled>Submit Walk-in Form</button>
-    <div id="wkStatusMsg" class="status"></div>
   </div>
-</div>
 
-<script src="main.js"></script>
+  <script>
+    // NOTE: API_BASE_URL ko same webapp URL se set karo jo main portal me hai
+    const API_BASE_URL = 'PUT_YOUR_WEBAPP_URL_HERE'; // same as index.html
+
+    let walkinToken = null;
+    let questions = [];
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function getQueryParam(name) {
+      const url = new URL(window.location.href);
+      return url.searchParams.get(name);
+    }
+
+    async function apiGet(action, params = {}) {
+      const url = new URL(API_BASE_URL);
+      url.searchParams.set('action', action);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) {
+          url.searchParams.set(k, v);
+        }
+      });
+      const res = await fetch(url.toString());
+      const json = await res.json().catch(() => ({}));
+      return json;
+    }
+
+    async function apiPost(action, data = {}) {
+      const body = { action, data };
+      const res = await fetch(API_BASE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json().catch(() => ({}));
+      return json;
+    }
+
+    function generateMathQuestions() {
+      const q = [];
+
+      // percent of number
+      const percTemplates = [
+        (n, p) => ({
+          text: `${p}% of ${n}`,
+          answer: (n * p) / 100
+        })
+      ];
+
+      const baseNums = [100, 120, 150, 180, 200, 240];
+      const percents = [25, 50, 75, 80, 90];
+
+      // 2 percentage questions
+      for (let i = 0; i < 2; i++) {
+        const n = baseNums[Math.floor(Math.random() * baseNums.length)];
+        const p = percents[Math.floor(Math.random() * percents.length)];
+        q.push(percTemplates[0](n, p));
+      }
+
+      // unit conversion
+      const unitQs = [
+        n => ({
+          text: `Convert ${n} meter into centimeters`,
+          answer: n * 100
+        }),
+        n => ({
+          text: `Convert ${n} centimeter into meters`,
+          answer: n / 100
+        })
+      ];
+      q.push(unitQs[0](5 + Math.floor(Math.random() * 16))); // 5-20 m
+      q.push(unitQs[1](100 + Math.floor(Math.random() * 401))); // 100-500 cm
+
+      return q;
+    }
+
+    function renderQuestions() {
+      questions = generateMathQuestions();
+      const container = $('questionsContainer');
+      container.innerHTML = '';
+      questions.forEach((q, idx) => {
+        const div = document.createElement('div');
+        div.className = 'q-item';
+        div.innerHTML = `
+          <label>Q${idx + 1}: ${q.text}</label>
+          <input type="number" step="0.01" id="q_${idx}" />
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function init() {
+      walkinToken = getQueryParam('walkinToken') || getQueryParam('t');
+      if (!walkinToken) {
+        $('introText').innerText = 'Invalid link (missing token). Please contact HR.';
+        return;
+      }
+
+      $('introText').innerText = 'Validating link...';
+
+      try {
+        const res = await apiGet('walkin_form_init', { walkinToken });
+        if (!res.success) {
+          $('introText').innerText = res.error || 'Invalid or expired link.';
+          return;
+        }
+
+        if (res.alreadySubmitted) {
+          $('introText').innerText = 'Aap already ye form submit kar chuke hain. Thank you.';
+          return;
+        }
+
+        $('introText').innerText = 'Please fill the below details carefully.';
+        $('formSection').style.display = '';
+
+        const c = res.candidate || {};
+        $('fullName').value = c.name || '';
+        $('jobPost').value = c.jobPost || '';
+
+        renderQuestions();
+      } catch (err) {
+        console.error(err);
+        $('introText').innerText = 'Error loading form. Please contact HR.';
+      }
+    }
+
+    async function submitForm() {
+      const fullName = $('fullName').value.trim();
+      const jobPost = $('jobPost').value.trim();
+      const infoSource = $('infoSource').value.trim();
+      const msgEl = $('msg');
+      msgEl.className = '';
+      msgEl.innerText = '';
+
+      if (!fullName || !jobPost || !infoSource) {
+        msgEl.className = 'error';
+        msgEl.innerText = 'Please fill all required fields.';
+        return;
+      }
+
+      // calculate score out of 10
+      let score = 0;
+      const perQ = 10 / questions.length;
+      questions.forEach((q, idx) => {
+        const input = document.getElementById(`q_${idx}`);
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+          const diff = Math.abs(val - q.answer);
+          // allow small tolerance
+          if (diff <= 0.01) {
+            score += perQ;
+          }
+        }
+      });
+      score = Math.round(score * 10) / 10; // one decimal
+
+      try {
+        $('btnSubmit').disabled = true;
+        msgEl.className = '';
+        msgEl.innerText = 'Submitting...';
+
+        const res = await apiPost('walkin_form_submit', {
+          walkinToken,
+          fullName,
+          jobPost,
+          infoSource,
+          mathScore10: score
+        });
+
+        if (!res.success) {
+          msgEl.className = 'error';
+          msgEl.innerText = res.error || 'Submission failed.';
+          $('btnSubmit').disabled = false;
+          return;
+        }
+
+        msgEl.className = 'success';
+        msgEl.innerText = `Thank you! Your response is recorded. (Math score: ${score}/10)`;
+        $('formSection').style.display = 'none';
+      } catch (err) {
+        console.error(err);
+        msgEl.className = 'error';
+        msgEl.innerText = 'Error submitting form. Please try again.';
+        $('btnSubmit').disabled = false;
+      }
+    }
+
+    window.onload = function () {
+      init();
+      $('btnSubmit').addEventListener('click', submitForm);
+    };
+  </script>
 </body>
 </html>
