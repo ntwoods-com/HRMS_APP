@@ -8,8 +8,8 @@
  ***************************************************/
 
 // CONFIG
-const API_BASE_URL = 'PASTE_YOUR_WEBAPP_URL_HERE'; // e.g. https://script.google.com/macros/s/AKfycb.../exec
-const GOOGLE_CLIENT_ID = 'PASTE_YOUR_GOOGLE_CLIENT_ID_HERE';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxh0etYDCdS7JmluGDhIjJT5JdI6GAtE0UyfTjIDon4OBXbryr5FIN73KCZYhW74jc_Zg/exec';
+const GOOGLE_CLIENT_ID = '1029752642188-ku0k9krbdbsttj9br238glq8h4k5loj3.apps.googleusercontent.com';
 
 let currentUser = null;
 let idToken = null;
