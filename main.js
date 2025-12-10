@@ -36,7 +36,39 @@ const btnCreateReq    = document.getElementById('btnCreateRequirement');
 // HR panel refs
 const panelReqListHR  = document.getElementById('panelReqListHR');
 const reqListContainer= document.getElementById('reqListContainer');
+// HR extra panels
+const panelUploadCVsHR   = document.getElementById('panelUploadCVsHR');
+const panelShortlistHR   = document.getElementById('panelShortlistHR');
+const panelCallScreenHR  = document.getElementById('panelCallScreenHR');
 
+// Upload CVs controls
+const uploadReqSelect    = document.getElementById('uploadReqSelect');
+const cvListInput        = document.getElementById('cvListInput');
+const btnUploadCVs       = document.getElementById('btnUploadCVs');
+const cvUploadProgress   = document.getElementById('cvUploadProgress');
+
+// Shortlisting controls
+const shortlistReqSelect       = document.getElementById('shortlistReqSelect');
+const btnLoadShortlist         = document.getElementById('btnLoadShortlist');
+const shortlistTableContainer  = document.getElementById('shortlistTableContainer');
+
+// Call screening controls
+const callReqSelect      = document.getElementById('callReqSelect');
+const btnLoadCallList    = document.getElementById('btnLoadCallList');
+const callListContainer  = document.getElementById('callListContainer');
+const callEditor         = document.getElementById('callEditor');
+const callCandName       = document.getElementById('callCandName');
+const callFamilyNotes    = document.getElementById('callFamilyNotes');
+const callStatusSelect   = document.getElementById('callStatusSelect');
+const callComm10         = document.getElementById('callComm10');
+const callExp10          = document.getElementById('callExp10');
+const callRemark         = document.getElementById('callRemark');
+const btnSaveCallDetails = document.getElementById('btnSaveCallDetails');
+
+// cache for requirement list to reuse in dropdowns
+let hrReqCache = [];
+// currently selected candidate for call screening
+let currentCallCandId = null;
 /***************************************************
  * Google Identity Services - init
  ***************************************************/
