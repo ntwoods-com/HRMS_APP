@@ -96,6 +96,7 @@ async function apiPost(action, data = {}) {
   };
   const res = await fetch(API_BASE_URL, {
     method: 'POST',
+    MODE: 'no-cors'
     headers: {
       'Content-Type': 'application/json'
     },
