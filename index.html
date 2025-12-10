@@ -175,6 +175,73 @@
   </div>
 </section>
 
+  <div id="panelUploadCVsHR" class="panel hidden">
+    <h2>Upload CVs (HR)</h2>
+    <div>
+      <label>Select Requirement</label>
+      <select id="uploadReqSelect"></select>
+
+      <!-- Simple helper: abhi ke liye HR yaha filename + URL paste karega
+           Example:
+           Rahul_9876543210_Naukri, https://drive.google.com/...
+           Amit_9876_WorkIndia, https://drive.google.com/... -->
+      <label>CV List (one per line: FileName, FileURL)</label>
+      <textarea id="cvListInput" rows="6" placeholder="CandidateName_Mobile_Source, https://..."></textarea>
+
+      <button id="btnUploadCVs">Upload All CVs</button>
+
+      <div id="cvUploadProgress" style="margin-top:8px;font-size:12px;color:#0f172a;"></div>
+    </div>
+  </div>
+
+  <div id="panelShortlistHR" class="panel hidden">
+    <h2>Shortlisting (HR)</h2>
+    <div>
+      <label>Select Requirement</label>
+      <select id="shortlistReqSelect"></select>
+      <button id="btnLoadShortlist" style="margin-top:6px;">Load Candidates</button>
+    </div>
+    <div id="shortlistTableContainer" style="margin-top:8px;"></div>
+  </div>
+
+  <div id="panelCallScreenHR" class="panel hidden">
+    <h2>Call Screening (HR)</h2>
+    <div>
+      <label>Select Requirement</label>
+      <select id="callReqSelect"></select>
+      <button id="btnLoadCallList" style="margin-top:6px;">Load Candidates</button>
+    </div>
+    <div id="callListContainer" style="margin-top:8px;"></div>
+
+    <!-- Simple inline editor for selected candidate -->
+    <div id="callEditor" class="hidden" style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:8px;">
+      <h3 style="font-size:14px;margin-top:0;">Call Details for <span id="callCandName"></span></h3>
+
+      <label>Family Background Notes</label>
+      <textarea id="callFamilyNotes" rows="3"></textarea>
+
+      <label>Call Status</label>
+      <select id="callStatusSelect">
+        <option value="">Select</option>
+        <option value="RecommendedOwner">Recommended for Owners</option>
+        <option value="SwitchedOff">Switched Off</option>
+        <option value="NoAnswer">No Answer</option>
+        <option value="NoIncoming">No Incoming</option>
+        <option value="Reject">Reject</option>
+      </select>
+
+      <label>Communication Skills (out of 10)</label>
+      <input id="callComm10" type="number" min="0" max="10"/>
+
+      <label>Professional Experience (out of 10)</label>
+      <input id="callExp10" type="number" min="0" max="10"/>
+
+      <label>HR Remark (On Call)</label>
+      <textarea id="callRemark" rows="2"></textarea>
+
+      <button id="btnSaveCallDetails">Save Call Details</button>
+    </div>
+  </div>
 <script src="main.js"></script>
 </body>
 </html>
