@@ -4,12 +4,16 @@
   <meta charset="UTF-8" />
   <title>NT Woods HRMS Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Basic styling, you can later replace with Tailwind / your CSS -->
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
       background: #f5f7fb;
+      color: #0f172a;
     }
     header {
       background: #0f172a;
@@ -23,8 +27,19 @@
       font-weight: 600;
       font-size: 18px;
     }
-    #loginSection, #appSection {
+    #userInfo {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    main {
       padding: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    #loginSection, #appSection {
+      margin-top: 8px;
     }
     .hidden { display: none; }
 
@@ -35,7 +50,7 @@
       margin-bottom: 16px;
     }
     .tile {
-      background: #fff;
+      background: #ffffff;
       border-radius: 12px;
       box-shadow: 0 2px 6px rgba(15,23,42,0.08);
       padding: 12px;
@@ -58,7 +73,7 @@
     }
 
     .panel {
-      background: #fff;
+      background: #ffffff;
       border-radius: 12px;
       padding: 16px;
       box-shadow: 0 2px 6px rgba(15,23,42,0.08);
@@ -67,16 +82,26 @@
     .panel h2 {
       margin-top: 0;
       font-size: 16px;
+      margin-bottom: 10px;
     }
 
-    label { font-size: 12px; display: block; margin-top: 8px; }
+    label {
+      font-size: 12px;
+      display: block;
+      margin-top: 8px;
+      margin-bottom: 2px;
+    }
     input, textarea, select, button {
       font-size: 13px;
       padding: 6px 8px;
       border-radius: 6px;
       border: 1px solid #cbd5e1;
       width: 100%;
-      box-sizing: border-box;
+      max-width: 100%;
+      font-family: inherit;
+    }
+    textarea {
+      resize: vertical;
     }
     button {
       border: none;
@@ -84,14 +109,16 @@
       color: #fff;
       cursor: pointer;
       margin-top: 10px;
+      width: auto;
     }
     button.secondary {
       background: #0f172a;
     }
     button:disabled {
-      opacity: 0.5;
+      opacity: 0.6;
       cursor: default;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -102,6 +129,7 @@
       border: 1px solid #e2e8f0;
       padding: 4px 6px;
       text-align: left;
+      vertical-align: top;
     }
     th {
       background: #f1f5f9;
@@ -115,6 +143,15 @@
       background: #e0f2fe;
       color: #0369a1;
     }
+
+    @media (max-width: 768px) {
+      main {
+        padding: 12px;
+      }
+      .tile {
+        flex: 1 1 100%;
+      }
+    }
   </style>
 
   <!-- Google Identity Services script -->
@@ -127,121 +164,139 @@
   <div id="userInfo"></div>
 </header>
 
-<section id="loginSection">
-  <h2>Login with Google</h2>
-  <div id="g_id_signin"></div>
-</section>
+<main>
+  <!-- LOGIN SECTION -->
+  <section id="loginSection">
+    <h2 style="font-size:16px;margin-bottom:8px;">Login with Google</h2>
+    <p style="font-size:12px;color:#64748b;margin-top:0;margin-bottom:8px;">
+      Please sign in with your official NT Woods Google account to access the HRMS portal.
+    </p>
+    <div id="g_id_signin"></div>
+  </section>
 
-<section id="appSection" class="hidden">
-  <div class="tiles" id="roleTiles">
-    <!-- Tiles render based on role -->
-  </div>
+  <!-- APP SECTION -->
+  <section id="appSection" class="hidden">
+    <!-- Tiles -->
+    <div class="tiles" id="roleTiles"></div>
 
-  <!-- Panels -->
-  <div id="panelRequirementsEA" class="panel hidden">
-    <h2>Raise Requirement (EA)</h2>
-    <div>
-      <label>Job Role</label>
-      <select id="reqJobRole"></select>
+    <!-- EA: Raise Requirement -->
+    <div id="panelRequirementsEA" class="panel hidden">
+      <h2>Raise Requirement (EA)</h2>
+      <div>
+        <label>Job Role</label>
+        <select id="reqJobRole"></select>
 
-      <label>Job Title</label>
-      <input id="reqJobTitle" />
+        <label>Job Title</label>
+        <input id="reqJobTitle" />
 
-      <label>Roles & Responsibilities</label>
-      <textarea id="reqResponsibilities" rows="3"></textarea>
+        <label>Roles & Responsibilities</label>
+        <textarea id="reqResponsibilities" rows="3"></textarea>
 
-      <label>Must Have Skills</label>
-      <textarea id="reqMustHave" rows="3"></textarea>
+        <label>Must Have Skills</label>
+        <textarea id="reqMustHave" rows="3"></textarea>
 
-      <label>Shift</label>
-      <input id="reqShift" />
+        <label>Shift</label>
+        <input id="reqShift" />
 
-      <label>Pay Scale</label>
-      <input id="reqPayScale" />
+        <label>Pay Scale</label>
+        <input id="reqPayScale" />
 
-      <label>Perks</label>
-      <input id="reqPerks" />
+        <label>Perks</label>
+        <input id="reqPerks" />
 
-      <label>Notes</label>
-      <textarea id="reqNotes" rows="2"></textarea>
+        <label>Notes</label>
+        <textarea id="reqNotes" rows="2"></textarea>
 
-      <button id="btnCreateRequirement">Create Requirement</button>
+        <button id="btnCreateRequirement">Create Requirement</button>
+      </div>
     </div>
-  </div>
 
-  <div id="panelReqListHR" class="panel hidden">
-    <h2>Review Requirements (HR)</h2>
-    <div id="reqListContainer"></div>
-  </div>
-</section>
-
-  <div id="panelUploadCVsHR" class="panel hidden">
-    <h2>Upload CVs (HR)</h2>
-    <div>
-      <label>Select Requirement</label>
-      <select id="uploadReqSelect"></select>
-
-      <!-- Simple helper: abhi ke liye HR yaha filename + URL paste karega
-           Example:
-           Rahul_9876543210_Naukri, https://drive.google.com/...
-           Amit_9876_WorkIndia, https://drive.google.com/... -->
-      <label>CV List (one per line: FileName, FileURL)</label>
-      <textarea id="cvListInput" rows="6" placeholder="CandidateName_Mobile_Source, https://..."></textarea>
-
-      <button id="btnUploadCVs">Upload All CVs</button>
-
-      <div id="cvUploadProgress" style="margin-top:8px;font-size:12px;color:#0f172a;"></div>
+    <!-- HR: Review Requirements -->
+    <div id="panelReqListHR" class="panel hidden">
+      <h2>Review Requirements (HR)</h2>
+      <div id="reqListContainer"></div>
     </div>
-  </div>
 
-  <div id="panelShortlistHR" class="panel hidden">
-    <h2>Shortlisting (HR)</h2>
-    <div>
-      <label>Select Requirement</label>
-      <select id="shortlistReqSelect"></select>
-      <button id="btnLoadShortlist" style="margin-top:6px;">Load Candidates</button>
+    <!-- HR: Upload CVs -->
+    <div id="panelUploadCVsHR" class="panel hidden">
+      <h2>Upload CVs (HR)</h2>
+      <div>
+        <label>Select Requirement</label>
+        <select id="uploadReqSelect"></select>
+
+        <label>CV List (one per line: FileName, FileURL)</label>
+        <textarea
+          id="cvListInput"
+          rows="6"
+          placeholder="Example:
+Rahul_9876543210_Naukri, https://drive.google.com/...
+Amit_9876543210_Indeed, https://drive.google.com/..."></textarea>
+
+        <button id="btnUploadCVs">Upload All CVs</button>
+
+        <div id="cvUploadProgress" style="margin-top:8px;font-size:12px;color:#0f172a;"></div>
+      </div>
     </div>
-    <div id="shortlistTableContainer" style="margin-top:8px;"></div>
-  </div>
 
-  <div id="panelCallScreenHR" class="panel hidden">
-    <h2>Call Screening (HR)</h2>
-    <div>
-      <label>Select Requirement</label>
-      <select id="callReqSelect"></select>
-      <button id="btnLoadCallList" style="margin-top:6px;">Load Candidates</button>
+    <!-- HR: Shortlisting -->
+    <div id="panelShortlistHR" class="panel hidden">
+      <h2>Shortlisting (HR)</h2>
+      <div>
+        <label>Select Requirement</label>
+        <select id="shortlistReqSelect"></select>
+        <button id="btnLoadShortlist" style="margin-top:6px;">Load Candidates</button>
+      </div>
+      <div id="shortlistTableContainer" style="margin-top:8px;"></div>
     </div>
-    <div id="callListContainer" style="margin-top:8px;"></div>
 
-    <!-- Simple inline editor for selected candidate -->
-    <div id="callEditor" class="hidden" style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:8px;">
-      <h3 style="font-size:14px;margin-top:0;">Call Details for <span id="callCandName"></span></h3>
+    <!-- HR: Call Screening -->
+    <div id="panelCallScreenHR" class="panel hidden">
+      <h2>Call Screening (HR)</h2>
+      <div>
+        <label>Select Requirement</label>
+        <select id="callReqSelect"></select>
+        <button id="btnLoadCallList" style="margin-top:6px;">Load Candidates</button>
+      </div>
 
-      <label>Family Background Notes</label>
-      <textarea id="callFamilyNotes" rows="3"></textarea>
+      <div id="callListContainer" style="margin-top:8px;"></div>
 
-      <label>Call Status</label>
-      <select id="callStatusSelect">
-        <option value="">Select</option>
-        <option value="RecommendedOwner">Recommended for Owners</option>
-        <option value="SwitchedOff">Switched Off</option>
-        <option value="NoAnswer">No Answer</option>
-        <option value="NoIncoming">No Incoming</option>
-        <option value="Reject">Reject</option>
-      </select>
+      <div
+        id="callEditor"
+        class="hidden"
+        style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:8px;"
+      >
+        <h3 style="font-size:14px;margin-top:0;">
+          Call Details for <span id="callCandName"></span>
+        </h3>
 
-      <label>Communication Skills (out of 10)</label>
-      <input id="callComm10" type="number" min="0" max="10"/>
+        <label>Family Background Notes</label>
+        <textarea id="callFamilyNotes" rows="3"></textarea>
 
-      <label>Professional Experience (out of 10)</label>
-      <input id="callExp10" type="number" min="0" max="10"/>
+        <label>Call Status</label>
+        <select id="callStatusSelect">
+          <option value="">Select</option>
+          <option value="RecommendedOwner">Recommended for Owners</option>
+          <option value="SwitchedOff">Switched Off</option>
+          <option value="NoAnswer">No Answer</option>
+          <option value="NoIncoming">No Incoming</option>
+          <option value="Reject">Reject</option>
+        </select>
 
-      <label>HR Remark (On Call)</label>
-      <textarea id="callRemark" rows="2"></textarea>
+        <label>Communication Skills (out of 10)</label>
+        <input id="callComm10" type="number" min="0" max="10"/>
 
-      <button id="btnSaveCallDetails">Save Call Details</button>
+        <label>Professional Experience (out of 10)</label>
+        <input id="callExp10" type="number" min="0" max="10"/>
+
+        <label>HR Remark (On Call)</label>
+        <textarea id="callRemark" rows="2"></textarea>
+
+        <button id="btnSaveCallDetails">Save Call Details</button>
+      </div>
     </div>
-  </div>
+  </section>
+</main>
+
 <script src="main.js"></script>
 </body>
 </html>
