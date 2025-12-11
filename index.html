@@ -1,536 +1,232 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>NT Woods HRMS Portal</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HRMS - Login</title>
+    <meta name="google-signin-client_id" content="YOUR_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 0;
-      background: #f5f7fb;
-      color: #0f172a;
-    }
-    header {
-      background: #0f172a;
-      color: #e5e7eb;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    header h1 {
-      font-size: 18px;
-      margin: 0;
-    }
-    header .user-info {
-      font-size: 13px;
-      opacity: 0.8;
-    }
-    main {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 16px;
-    }
-    .hidden {
-      display: none !important;
-    }
-    .card {
-      background: #ffffff;
-      border-radius: 10px;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-    .tiles {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    .tile {
-      background: #ffffff;
-      border-radius: 10px;
-      padding: 12px 14px;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease;
-    }
-    .tile:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 3px 8px rgba(15, 23, 42, 0.15);
-      border-color: #2563eb33;
-    }
-    .tile h3 {
-      margin: 0 0 4px;
-      font-size: 15px;
-    }
-    .tile p {
-      margin: 0;
-      font-size: 12px;
-      color: #6b7280;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-    }
-    .badge-role {
-      background: #1d4ed8;
-      color: #e5e7eb;
-    }
-    .badge-ea {
-      background: #d97706;
-      color: #111827;
-    }
-    .badge-hr {
-      background: #059669;
-      color: #ecfdf5;
-    }
-    .badge-admin {
-      background: #7c3aed;
-      color: #f5f3ff;
-    }
-    .panel {
-      margin-top: 8px;
-    }
-    .panel h2 {
-      font-size: 18px;
-      margin: 0 0 10px;
-    }
-    .panel h3 {
-      font-size: 16px;
-      margin: 16px 0 8px;
-    }
-    label {
-      display: block;
-      font-size: 13px;
-      margin-bottom: 4px;
-      font-weight: 500;
-    }
-    input[type="text"],
-    input[type="number"],
-    input[type="date"],
-    input[type="time"],
-    textarea,
-    select {
-      width: 100%;
-      padding: 8px 10px;
-      font-size: 13px;
-      border-radius: 6px;
-      border: 1px solid #cbd5f5;
-      outline: none;
-      background: #f9fafb;
-      margin-bottom: 8px;
-    }
-    input:focus,
-    textarea:focus,
-    select:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 1px #bfdbfe;
-      background: #ffffff;
-    }
-    textarea {
-      min-height: 70px;
-      resize: vertical;
-    }
-    button {
-      border: none;
-      border-radius: 6px;
-      padding: 7px 12px;
-      font-size: 13px;
-      cursor: pointer;
-      background: #2563eb;
-      color: #eff6ff;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    button.secondary {
-      background: #e5e7eb;
-      color: #111827;
-    }
-    button.danger {
-      background: #dc2626;
-      color: #fee2e2;
-    }
-    button.small {
-      padding: 4px 8px;
-      font-size: 11px;
-    }
-    button:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      margin-top: 8px;
-    }
-    th, td {
-      padding: 6px 8px;
-      border-bottom: 1px solid #e5e7eb;
-      text-align: left;
-      vertical-align: top;
-    }
-    th {
-      background: #eff6ff;
-      font-weight: 600;
-      font-size: 12px;
-    }
-    .status-pill {
-      display: inline-flex;
-      padding: 2px 6px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 600;
-    }
-    .status-SEND_BACK {
-      background: #fef3c7;
-      color: #92400e;
-    }
-    .status-VALID {
-      background: #dcfce7;
-      color: #166534;
-    }
-    .status-DRAFT {
-      background: #e5e7eb;
-      color: #374151;
-    }
-    .status-UPLOADED,
-    .status-SHORTLISTED,
-    .status-SCHEDULED,
-    .status-OWNER_APPROVED_WALKIN {
-      background: #dbeafe;
-      color: #1d4ed8;
-    }
-    .status-REJECTED {
-      background: #fee2e2;
-      color: #b91c1c;
-    }
-    .status-ON_HOLD {
-      background: #f3e8ff;
-      color: #6d28d9;
-    }
-    .muted {
-      font-size: 11px;
-      color: #6b7280;
-    }
-    .pill {
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: #e5e7eb;
-      font-size: 11px;
-    }
-    .flex {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    .flex-between {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-    .mt-8 { margin-top: 8px; }
-    .mt-12 { margin-top: 12px; }
-    .mt-16 { margin-top: 16px; }
-    .mb-8 { margin-bottom: 8px; }
-    .tag {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 999px;
-      background: #e5e7eb;
-      font-size: 10px;
-    }
-    .link {
-      color: #1d4ed8;
-      text-decoration: underline;
-      cursor: pointer;
-    }
-    .error {
-      color: #b91c1c;
-      font-size: 12px;
-      margin-top: 4px;
-    }
-    .success {
-      color: #166534;
-      font-size: 12px;
-      margin-top: 4px;
-    }
-    .loader-text {
-      font-size: 13px;
-      color: #6b7280;
-    }
-  </style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-  <!-- Google Identity Services -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+        .login-container {
+            background: white;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: white;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        #googleSignInBtn {
+            margin: 2rem auto;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 1rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .info-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eee;
+        }
+
+        .info-section h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .info-item {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            text-align: left;
+        }
+
+        .info-item strong {
+            color: #667eea;
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>NT Woods HRMS Portal</h1>
-    <div class="user-info" id="headerUserInfo">
-      Not signed in
+    <div class="login-container">
+        <div class="logo">🏢</div>
+        <h1>HRMS Portal</h1>
+        <p>Human Resource Management System</p>
+
+        <div id="googleSignInBtn"></div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Signing you in...</p>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="info-section">
+            <h3>Access Roles</h3>
+            <div class="info-item">
+                <strong>Admin:</strong> Full system access & management
+            </div>
+            <div class="info-item">
+                <strong>EA:</strong> Requirement management
+            </div>
+            <div class="info-item">
+                <strong>HR:</strong> Recruitment & screening
+            </div>
+        </div>
     </div>
-  </header>
 
-  <main>
-    <!-- LOGIN SECTION -->
-    <section id="loginSection" class="card">
-      <h2>Sign in</h2>
-      <p class="muted">
-        HRMS access ke liye NT Woods official Google account se sign-in karein.
-      </p>
-      <div id="g_id_signin"></div>
-      <div id="loginError" class="error"></div>
-    </section>
+    <script>
+        const APPS_SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
 
-    <!-- APP SECTION -->
-    <section id="appSection" class="hidden">
-      <div class="card">
-        <div class="flex-between">
-          <div>
-            <div id="welcomeText" style="font-weight:600; font-size:15px;"></div>
-            <div id="roleBadges" class="mt-8"></div>
-          </div>
-          <div>
-            <button id="btnSignOut" class="secondary small">Sign out</button>
-          </div>
-        </div>
-      </div>
+        function handleCredentialResponse(response) {
+            showLoading(true);
+            
+            // Decode JWT to get user email
+            const payload = parseJwt(response.credential);
+            const email = payload.email;
 
-      <!-- Tiles -->
-      <div class="card">
-        <h2 style="margin-top:0;">Modules</h2>
-        <div class="tiles" id="roleTiles"></div>
-      </div>
+            // Send to Apps Script for verification
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'login',
+                    email: email,
+                    idToken: response.credential
+                })
+            })
+            .then(() => {
+                // Since we're using no-cors, we can't read the response
+                // We'll verify the user on the dashboard page
+                sessionStorage.setItem('userEmail', email);
+                sessionStorage.setItem('idToken', response.credential);
+                
+                // Redirect to dashboard
+                window.location.href = 'dashboard.html';
+            })
+            .catch(error => {
+                showLoading(false);
+                showError('Login failed. Please try again.');
+                console.error('Login error:', error);
+            });
+        }
 
-      <!-- PANELS -->
+        function parseJwt(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
 
-      <!-- EA: Raise Requirement -->
-      <div id="panelEARequirement" class="card panel hidden">
-        <h2>Raise Requirement (EA)</h2>
-        <p class="muted mb-8">
-          Job role select karte hi template auto-fill ho jayega. Aap changes kar sakte ho phir requirement save kar do.
-        </p>
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="eaJobRole">Job Role</label>
-            <select id="eaJobRole"></select>
-          </div>
-          <div>
-            <button id="btnLoadTemplate" class="small secondary">Load Template</button>
-          </div>
-        </div>
-        <label for="eaJobTitle">Job Title</label>
-        <input id="eaJobTitle" type="text" />
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+        }
 
-        <label for="eaResponsibilities">Roles &amp; Responsibilities</label>
-        <textarea id="eaResponsibilities"></textarea>
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+        }
 
-        <label for="eaMustHave">Must Have Skills</label>
-        <textarea id="eaMustHave"></textarea>
+        window.onload = function() {
+            google.accounts.id.initialize({
+                client_id: 'YOUR_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com',
+                callback: handleCredentialResponse
+            });
 
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="eaShift">Shift</label>
-            <input id="eaShift" type="text" />
-          </div>
-          <div style="flex:1;">
-            <label for="eaPayScale">Pay Scale</label>
-            <input id="eaPayScale" type="text" />
-          </div>
-        </div>
+            google.accounts.id.renderButton(
+                document.getElementById('googleSignInBtn'),
+                { 
+                    theme: 'filled_blue',
+                    size: 'large',
+                    width: 300,
+                    text: 'signin_with'
+                }
+            );
 
-        <label for="eaPerks">Perks</label>
-        <textarea id="eaPerks"></textarea>
-
-        <label for="eaNotes">Notes</label>
-        <textarea id="eaNotes"></textarea>
-
-        <button id="btnSaveRequirement">Save Requirement</button>
-        <div id="eaRequirementMsg" class="mt-8"></div>
-      </div>
-
-      <!-- EA: Incomplete / Valid Requirements -->
-      <div id="panelEARequirementsView" class="card panel hidden">
-        <h2>My Requirements (EA View)</h2>
-        <p class="muted">
-          Incomplete = HR ne <strong>SEND_BACK</strong> mark kiya. Valid = HR ne requirement approve kar di.
-        </p>
-        <button id="btnRefreshEARequirements" class="small">Refresh</button>
-        <div id="eaReqViewContainer" class="mt-12 loader-text">Loading...</div>
-      </div>
-
-      <!-- HR: Review Requirements -->
-      <div id="panelHRRequirementsReview" class="card panel hidden">
-        <h2>Review Requirements (HR)</h2>
-        <p class="muted">
-          Yahan se HR requirement ko <strong>VALID</strong> ya <strong>SEND_BACK</strong> mark karega, remark compulsory for SEND_BACK.
-        </p>
-        <button id="btnRefreshHRRequirements" class="small">Refresh</button>
-        <div id="hrRequirementsContainer" class="mt-12 loader-text">Loading...</div>
-      </div>
-
-      <!-- HR: Upload CVs -->
-      <div id="panelHRUploadCVs" class="card panel hidden">
-        <h2>Upload CVs (HR)</h2>
-        <p class="muted">
-          Abhi basic version: Requirement ID choose karo, fir neeche file list (name + URL) paste karo.
-          Backend fileName se <code>CandidateName_Mobile_Source</code> parse karega.
-        </p>
-        <label for="uploadRequirementId">Requirement ID</label>
-        <input id="uploadRequirementId" type="text" placeholder="e.g. REQ-0001" />
-
-        <label for="uploadCVList">
-          CV List (one per line: <code>FileName,FileUrl</code>)
-        </label>
-        <textarea id="uploadCVList" placeholder="John_9876543210_Naukri,https://drive.google.com/...."></textarea>
-
-        <button id="btnUploadCVs">Upload All</button>
-        <div id="uploadCVMsg" class="mt-8"></div>
-      </div>
-
-      <!-- HR: Shortlisting -->
-      <div id="panelHRShortlisting" class="card panel hidden">
-        <h2>Shortlisting (HR)</h2>
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="shortlistRequirementId">Requirement ID</label>
-            <input id="shortlistRequirementId" type="text" placeholder="REQ-0001" />
-          </div>
-          <div>
-            <button id="btnLoadShortlist" class="small">Load Candidates</button>
-          </div>
-        </div>
-        <div id="shortlistContainer" class="mt-12 loader-text">No data loaded.</div>
-      </div>
-
-      <!-- HR: Call Screening -->
-      <div id="panelHRCallScreen" class="card panel hidden">
-        <h2>On-call Screening (HR)</h2>
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="callRequirementId">Requirement ID</label>
-            <input id="callRequirementId" type="text" placeholder="REQ-0001" />
-          </div>
-          <div>
-            <button id="btnLoadCallScreen" class="small">Load Candidates</button>
-          </div>
-        </div>
-        <div id="callScreenContainer" class="mt-12 loader-text">No data loaded.</div>
-      </div>
-
-      <!-- HR: Owner Discussion -->
-      <div id="panelHROwnerDiscuss" class="card panel hidden">
-        <h2>Discuss with Owners (HR)</h2>
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="ownerRequirementId">Requirement ID</label>
-            <input id="ownerRequirementId" type="text" placeholder="REQ-0001" />
-          </div>
-          <div>
-            <button id="btnLoadOwnerDiscuss" class="small">Load Candidates</button>
-          </div>
-        </div>
-        <div id="ownerDiscussContainer" class="mt-12 loader-text">No data loaded.</div>
-      </div>
-
-      <!-- HR: Job Posting -->
-      <div id="panelHRJobPosting" class="card panel hidden">
-        <h2>Job Posting (Portals Tracking)</h2>
-        <p class="muted">
-          Har requirement ke liye Naukri / Indeed / WorkIndia / Apna / Direct ka posting status &amp; screenshot URL track karein.
-        </p>
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="postingRequirementId">Requirement ID</label>
-            <input id="postingRequirementId" type="text" placeholder="REQ-0001" />
-          </div>
-          <div>
-            <button id="btnLoadJobPosting" class="small">Load</button>
-          </div>
-        </div>
-        <div id="jobPostingContainer" class="mt-12 loader-text">No data loaded.</div>
-      </div>
-
-      <!-- HR: Schedule Interviews -->
-      <div id="panelHRScheduleInterviews" class="card panel hidden">
-        <h2>Schedule Interviews (HR)</h2>
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="scheduleReqId">Requirement ID</label>
-            <input id="scheduleReqId" type="text" placeholder="REQ-0001" />
-          </div>
-          <div>
-            <button id="btnLoadSchedule" class="small">Load Candidates</button>
-          </div>
-        </div>
-        <div id="scheduleContainer" class="mt-12 loader-text">No data loaded.</div>
-      </div>
-
-      <!-- HR: Walk-ins -->
-      <div id="panelHRWalkins" class="card panel hidden">
-        <h2>Walk-ins (Today ke Interviews)</h2>
-        <div class="flex">
-          <div>
-            <label for="walkinDate">Interview Date</label>
-            <input id="walkinDate" type="date" />
-          </div>
-          <div style="padding-top:18px;">
-            <button id="btnLoadWalkins" class="small">Load</button>
-          </div>
-        </div>
-        <div class="muted mt-8">
-          <strong>Confirm Call</strong> = telephonic confirmation,  
-          <strong>Appeared</strong> = candidate office aa gaya; link generate hoga walk-in form ka.
-        </div>
-        <div id="walkinsContainer" class="mt-12 loader-text">No data loaded.</div>
-      </div>
-
-      <!-- Tests Panel (Admin / EA) -->
-      <div id="panelTests" class="card panel hidden">
-        <h2>Tests Panel (Excel / Tally / Voice)</h2>
-        <p class="muted">
-          Candidate ID daalo, marks update karo. Excel / Tally / Voice kisi bhi combination me blank reh sakte hain.
-        </p>
-        <label for="testCandidateId">Candidate ID</label>
-        <input id="testCandidateId" type="text" placeholder="CAND-00001" />
-
-        <div class="flex">
-          <div style="flex:1;">
-            <label for="testExcelMarks">Excel (out of 10)</label>
-            <input id="testExcelMarks" type="number" min="0" max="10" />
-          </div>
-          <div style="flex:1;">
-            <label for="testTallyMarks">Tally (out of 10)</label>
-            <input id="testTallyMarks" type="number" min="0" max="10" />
-          </div>
-          <div style="flex:1;">
-            <label for="testVoiceMarks">Voice (out of 10)</label>
-            <input id="testVoiceMarks" type="number" min="0" max="10" />
-          </div>
-        </div>
-        <button id="btnSaveTests">Save Marks</button>
-        <div id="testPanelMsg" class="mt-8"></div>
-      </div>
-    </section>
-  </main>
-
-  <script src="main.js"></script>
+            // Auto-prompt
+            google.accounts.id.prompt();
+        };
+    </script>
 </body>
 </html>
