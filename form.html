@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Initial Assessment - HRMS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .form-container {
+            background: white;
+            max-width: 700px;
+            width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .form-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .form-header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-header p {
+            opacity: 0.9;
+        }
+
+        .form-body {
+            padding: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .required {
+            color: #e74c3c;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .question-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #667eea;
+        }
+
+        .question-number {
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .question-text {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        .answer-input {
+            background: white;
+        }
+
+        .submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .timer {
+            background: #fff3cd;
+            color: #856404;
+            padding: 1rem;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 8px;
+        }
+
+        .success-message h2 {
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .form-body {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="form-header">
+            <h1>🏢 Initial Assessment</h1>
+            <p>N.T Woods Pvt. Ltd.</p>
+        </div>
+
+        <div class="form-body" id="formContent">
+            <div class="timer" id="timer">
+                ⏰ This form is valid for 24 hours
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <form id="assessmentForm">
+                <!-- Fixed Questions -->
+                <div class="form-group">
+                    <label>Your Full Name <span class="required">*</span></label>
+                    <input type="text" id="fullName" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Applying For (Job Post) <span class="required">*</span></label>
+                    <input type="text" id="jobPost" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Where did you get info about this job? <span class="required">*</span></label>
+                    <textarea id="jobSource" required></textarea>
+                </div>
+
+                <!-- Random Questions -->
+                <div id="randomQuestions"></div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    Submit Assessment
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const APPS_SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+        
+        // Get token from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        if (!token) {
+            showError('Invalid access link. Please contact HR.');
+        }
+
+        // Generate random math questions
+        function generateRandomQuestions() {
+            const questions = [];
+            
+            const templates = [
+                () => {
+                    const percent = [25, 50, 75, 88, 120][Math.floor(Math.random() * 5)];
+                    const num = [100, 200, 300, 400, 500][Math.floor(Math.random() * 5)];
+                    return {
+                        question: `What is ${percent}% of ${num}?`,
+                        answer: (percent * num / 100).toString()
+                    };
+                },
+                () => {
+                    const fraction = ['half', 'one third', 'one fourth', 'two thirds'][Math.floor(Math.random() * 4)];
+                    const num = [120, 180, 240, 360, 480][Math.floor(Math.random() * 5)];
+                    const divisor = fraction === 'half' ? 2 : fraction === 'one third' ? 3 : fraction === 'one fourth' ? 4 : 1.5;
+                    return {
+                        question: `What is ${fraction} of ${num}?`,
+                        answer: (num / divisor).toString()
+                    };
+                },
+                () => {
+                    const meters = [5, 10, 15, 20, 25][Math.floor(Math.random() * 5)];
+                    return {
+                        question: `Convert ${meters} meters into centimeters`,
+                        answer: (meters * 100).toString()
+                    };
+                },
+                () => {
+                    const kg = [2, 3, 5, 10][Math.floor(Math.random() * 4)];
+                    return {
+                        question: `Convert ${kg} kilograms into grams`,
+                        answer: (kg * 1000).toString()
+                    };
+                },
+                () => {
+                    const a = Math.floor(Math.random() * 20) + 10;
+                    const b = Math.floor(Math.random() * 20) + 10;
+                    return {
+                        question: `What is ${a} + ${b}?`,
+                        answer: (a + b).toString()
+                    };
+                },
+                () => {
+                    const a = Math.floor(Math.random() * 50) + 50;
+                    const b = Math.floor(Math.random() * 30) + 10;
+                    return {
+                        question: `What is ${a} - ${b}?`,
+                        answer: (a - b).toString()
+                    };
+                },
+                () => {
+                    const a = Math.floor(Math.random() * 12) + 2;
+                    const b = Math.floor(Math.random() * 12) + 2;
+                    return {
+                        question: `What is ${a} × ${b}?`,
+                        answer: (a * b).toString()
+                    };
+                }
+            ];
+
+            // Select 4 random templates
+            const selected = [];
+            while (selected.length < 4) {
+                const template = templates[Math.floor(Math.random() * templates.length)];
+                selected.push(template());
+            }
+
+            return selected;
+        }
+
+        // Render random questions
+        function renderRandomQuestions() {
+            const container = document.getElementById('randomQuestions');
+            const questions = generateRandomQuestions();
+            
+            let html = '';
+            questions.forEach((q, index) => {
+                html += `
+                    <div class="question-card">
+                        <div class="question-number">Question ${index + 4}</div>
+                        <div class="question-text">${q.question}</div>
+                        <input type="text" class="answer-input" id="answer${index + 4}" data-question="${q.question}" required>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Show error
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+        }
+
+        // Show success
+        function showSuccess() {
+            const formContent = document.getElementById('formContent');
+            formContent.innerHTML = `
+                <div class="success-message">
+                    <h2>✅ Assessment Submitted Successfully!</h2>
+                    <p>Thank you for completing the initial assessment. Our HR team will review your responses and contact you shortly for the next steps.</p>
+                    <p style="margin-top: 1rem; color: #666;">You can now close this window.</p>
+                </div>
+            `;
+        }
+
+        // Handle form submission
+        document.getElementById('assessmentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+
+            // Collect answers
+            const answers = [];
+            for (let i = 4; i <= 7; i++) {
+                const input = document.getElementById(`answer${i}`);
+                answers.push({
+                    question: input.getAttribute('data-question'),
+                    answer: input.value
+                });
+            }
+
+            // Prepare data
+            const data = {
+                action: 'submitInitialPaper',
+                token: token,
+                fullName: document.getElementById('fullName').value,
+                applyingFor: document.getElementById('jobPost').value,
+                jobSource: document.getElementById('jobSource').value,
+                answers: answers
+            };
+
+            try {
+                await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                // Show confirmation
+                alert('Assessment submitted successfully! Thank you.');
+                showSuccess();
+
+            } catch (error) {
+                console.error('Submission error:', error);
+                showError('Failed to submit. Please try again or contact HR.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Assessment';
+            }
+        });
+
+        // Initialize
+        renderRandomQuestions();
+    </script>
+</body>
+</html>
