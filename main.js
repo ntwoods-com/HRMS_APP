@@ -1,23 +1,56 @@
 /***************************************************
- * main.js - NT Woods HRMS Frontend
+ * main.js - NT Woods HRMS Frontend (Phase-1)
  * - Google OAuth (GIS) login
- * - Single API client (GET/POST)
- * - NO-CORS MODE ENABLED FOR POST (Data saving fix)
+ * - Single API client (GET + POST no-cors)
+ * - Role-based tiles
+ *   EA: Raise Requirement, My Requirements, Tests
+ *   HR: Review, Upload CVs, Shortlisting, Call Screen,
+ *       Owner Discussion, Job Posting, Schedule, Walk-ins
  ***************************************************/
 
-// ===== CONFIG =====
+/* ========== CONFIG ========== */
+
+// Yaha apna deployed Apps Script Web App URL daalo
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxUXXUfHQ132Hy4Fp4cdwCzrAK_dr_MeHCsSjSPLlLMU51r35j2Op64aXImM9nWfEX3FQ/exec';
+
+// Yaha apna Google OAuth Client ID daalo
 const GOOGLE_CLIENT_ID = '1029752642188-ku0k9krbdbsttj9br238glq8h4k5loj3.apps.googleusercontent.com';
 
-// Walk-in form page
+// Walk-in form public page (GitHub Pages pe walkin_form.html rakhoge)
 const WALKIN_FORM_URL = window.location.origin + '/walkin_form.html';
 
-// ===== GLOBAL STATE =====
+/* ========== GLOBAL STATE ========== */
+
 let currentUser = null;
 let idToken = null;
 let jobTemplatesCache = [];
 
-// ===== Simple helpers =====
+// HR / EA lists + UI states
+let hrReqList = [];
+let hrReqState = { search: '', statusFilter: 'ALL', page: 1, pageSize: 10 };
+
+let shortlistList = [];
+let shortlistState = { search: '', page: 1, pageSize: 10 };
+
+let callScreenList = [];
+let callScreenState = { search: '', page: 1, pageSize: 10 };
+
+let ownerDiscussList = [];
+let ownerDiscussState = { search: '', statusFilter: 'ALL', page: 1, pageSize: 10 };
+
+let scheduleList = [];
+let scheduleState = { search: '', page: 1, pageSize: 10 };
+
+let walkinsList = [];
+let walkinsState = {
+  search: '',
+  filter: 'ALL', // ALL / CONFIRM_PENDING / CONFIRMED / APPEARED
+  page: 1,
+  pageSize: 10
+};
+
+/* ========== HELPER UTILS ========== */
+
 function $(id) {
   return document.getElementById(id);
 }
@@ -42,17 +75,34 @@ function htmlEscape(str) {
     .replace(/'/g, '&#39;');
 }
 
-// ===== API CLIENT =====
+// Generic pagination footer
+function buildPaginationControls(state, totalCount) {
+  const totalPages = Math.max(1, Math.ceil((totalCount || 1) / (state.pageSize || 10)));
+  const current = Math.min(Math.max(1, state.page || 1), totalPages);
 
-// Note: GET requests standard mode me rahenge taaki hum data read kar sakein.
+  return `
+    <div class="flex-between mt-8">
+      <div class="muted">
+        Showing page <strong>${current}</strong> of <strong>${totalPages}</strong>
+        &middot; Total: <strong>${totalCount}</strong>
+      </div>
+      <div class="flex">
+        <button class="small secondary pag-prev" ${current === 1 ? 'disabled' : ''}>&laquo; Prev</button>
+        <button class="small secondary pag-next" ${current === totalPages ? 'disabled' : ''}>Next &raquo;</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ========== API CLIENT ========== */
+
+// GET – normal JSON response
 async function apiGet(action, params = {}) {
   const url = new URL(API_BASE_URL);
   url.searchParams.set('action', action);
-  if (idToken) {
-    url.searchParams.set('idToken', idToken);
-  }
+  if (idToken) url.searchParams.set('idToken', idToken);
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) {
+    if (v !== undefined && v !== null && v !== '') {
       url.searchParams.set(k, v);
     }
   });
@@ -65,8 +115,7 @@ async function apiGet(action, params = {}) {
   return json;
 }
 
-// UPDATED: NO-CORS POST
-// Server response check nahi karega, seedha success return karega.
+// POST – fire & forget (NO-CORS, response check nahi)
 async function apiPost(action, data = {}) {
   const body = {
     action,
@@ -74,33 +123,29 @@ async function apiPost(action, data = {}) {
     data
   };
 
-  // 1. mode: 'no-cors' taaki browser block na kare
-  // 2. content-type: text/plain taaki preflight request na jaye
-  await fetch(API_BASE_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body)
-  });
+  try {
+    await fetch(API_BASE_URL, {
+      method: 'POST',
+      mode: 'no-cors', // <--- important
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
 
-  console.log(`Sent to server (no-cors): ${action}`);
-
-  // Dummy success response taaki UI crash na ho
-  return {
-    success: true,
-    requirementId: 'REQ-SAVED (Check Sheet)', // Fake ID for UI
-    candidates: ['Data Sent to Sheet'],       // Fake List for UI
-    walkinToken: 'TOKEN-HIDDEN-IN-NOCORS'     // Note: Real token read nahi kar sakte
-  };
+    // no response parsing, assume success
+    return { success: true };
+  } catch (err) {
+    console.error('POST failed:', err);
+    throw new Error('Network error while calling ' + action);
+  }
 }
 
-// ===== Google Identity Services callback =====
+/* ========== GOOGLE LOGIN (GIS) ========== */
+
 async function handleCredentialResponse(response) {
   try {
     const token = response.credential;
-    if (!token) {
-      throw new Error('Empty credential from Google');
-    }
+    if (!token) throw new Error('Empty credential from Google.');
+
     idToken = token;
     $('loginError').innerText = '';
 
@@ -109,7 +154,7 @@ async function handleCredentialResponse(response) {
     renderAppAfterLogin();
   } catch (err) {
     console.error(err);
-    $('loginError').innerText = 'Login failed: ' + err;
+    $('loginError').innerText = 'Login failed: ' + err.message;
   }
 }
 
@@ -120,6 +165,7 @@ function initGoogleLogin() {
         client_id: GOOGLE_CLIENT_ID,
         callback: handleCredentialResponse
       });
+
       google.accounts.id.renderButton(
         $('g_id_signin'),
         { theme: 'outline', size: 'large' }
@@ -133,7 +179,8 @@ function initGoogleLogin() {
   }
 }
 
-// ===== App after login =====
+/* ========== APP BOOT AFTER LOGIN ========== */
+
 function renderAppAfterLogin() {
   if (!currentUser) return;
 
@@ -150,7 +197,8 @@ function renderAppAfterLogin() {
   wireAllButtons();
 }
 
-// ===== Tiles based on role =====
+/* ========== TILES / PANELS ========== */
+
 function renderRoleTiles() {
   const container = $('roleTiles');
   container.innerHTML = '';
@@ -158,79 +206,79 @@ function renderRoleTiles() {
 
   const tiles = [];
 
-  // EA + ADMIN
+  // EA + ADMIN tiles
   if (['EA', 'ADMIN'].includes(currentUser.role)) {
     tiles.push(
       {
         id: 'tile-ea-raise',
         title: 'Raise Requirement',
-        desc: 'EA / Admin – create new hiring requirement using templates.',
+        desc: 'EA/Admin – new hiring requirement using templates.',
         panelId: 'panelEARequirement'
       },
       {
         id: 'tile-ea-req-view',
         title: 'My Requirements',
-        desc: 'EA view – Incomplete vs Valid requirements (HR SEND_BACK / VALID).',
+        desc: 'EA view – Incomplete vs Valid requirements.',
         panelId: 'panelEARequirementsView'
       },
       {
         id: 'tile-tests',
         title: 'Tests Panel',
-        desc: 'Excel, Tally, Voice marks entry for candidates.',
+        desc: 'Excel / Tally / Voice marks entry.',
         panelId: 'panelTests'
       }
     );
   }
 
-  // HR + ADMIN
+  // HR + ADMIN tiles
   if (['HR', 'ADMIN'].includes(currentUser.role)) {
     tiles.push(
       {
         id: 'tile-hr-req-review',
         title: 'Review Requirements',
-        desc: 'HR validation – mark requirements as VALID or SEND_BACK.',
+        desc: 'HR validation – VALID / SEND_BACK with remarks.',
         panelId: 'panelHRRequirementsReview'
       },
       {
         id: 'tile-hr-upload-cvs',
         title: 'Upload CVs',
-        desc: 'Bulk CV upload per requirement (filename based parsing).',
+        desc: 'Bulk CV upload per requirement (filename parsing).',
         panelId: 'panelHRUploadCVs'
       },
       {
         id: 'tile-hr-shortlist',
         title: 'Shortlisting',
-        desc: 'Approve / Reject CVs with stage tag “Shortlisting”.',
+        desc: 'Approve / Reject CVs with “Shortlisting” tag.',
         panelId: 'panelHRShortlisting'
       },
       {
         id: 'tile-hr-call-screen',
         title: 'On-call Screening',
-        desc: 'Family background + communication / experience scoring.',
+        desc: 'Family background + soft skills scores.',
         panelId: 'panelHRCallScreen'
       },
       {
         id: 'tile-hr-owner-discuss',
         title: 'Discuss with Owners',
-        desc: 'Owner decision: Approve / Reject / Hold + Walk-in date/time.',
+        desc: 'Owner decision + walk-in date/time.',
         panelId: 'panelHROwnerDiscuss'
       },
       {
         id: 'tile-hr-job-posting',
         title: 'Job Posting',
-        desc: 'Portal-wise posted status + screenshot URLs.',
+        desc: 'Portal-wise posted status + screenshots.',
         panelId: 'panelHRJobPosting'
       },
       {
         id: 'tile-hr-schedule',
         title: 'Schedule Interviews',
-        desc: 'Convert owner approved candidates to scheduled interviews.',
+        desc: 'Owner-approved → scheduled interviews.',
         panelId: 'panelHRScheduleInterviews'
       },
       {
         id: 'tile-hr-walkins',
-        title: 'Walk-ins',
-        desc: 'Today ke interviews, confirm call + appeared → walk-in form link.',
+        title: 'Walk-ins (Today)',
+        desc: 'Today ke interviews, Confirm Call, Appeared → token link.',
         panelId: 'panelHRWalkins'
       }
     );
@@ -249,7 +297,6 @@ function renderRoleTiles() {
   });
 }
 
-// ===== Panel show/hide =====
 function hideAllPanels() {
   const ids = [
     'panelEARequirement',
@@ -271,7 +318,6 @@ function showPanel(panelId) {
   hideAllPanels();
   show(panelId);
 
-  // lazy-load specific data on first open or refresh button
   switch (panelId) {
     case 'panelEARequirement':
       loadJobTemplatesIfNeeded();
@@ -285,7 +331,8 @@ function showPanel(panelId) {
   }
 }
 
-// ===== Job Templates & EA Raise Requirement =====
+/* ========== EA: RAISE REQUIREMENT (TEMPLATES) ========== */
+
 async function loadJobTemplatesIfNeeded() {
   const select = $('eaJobRole');
   if (jobTemplatesCache.length) {
@@ -353,7 +400,8 @@ async function saveRequirementEA() {
 
   try {
     $('btnSaveRequirement').disabled = true;
-    const res = await apiPost('create_requirement', {
+
+    await apiPost('create_requirement', {
       jobRole,
       jobTitle,
       responsibilities,
@@ -363,19 +411,20 @@ async function saveRequirementEA() {
       perks,
       notes
     });
+
     msgEl.className = 'success';
-    // Fake success ID show karega
-    msgEl.innerText = `Requirement saved: ${res.requirementId}`;
+    msgEl.innerText = 'Requirement save request send ho gayi ✅';
   } catch (err) {
     console.error(err);
     msgEl.className = 'error';
-    msgEl.innerText = 'Failed: ' + err;
+    msgEl.innerText = 'Failed: ' + err.message;
   } finally {
     $('btnSaveRequirement').disabled = false;
   }
 }
 
-// ===== EA Requirements View (Incomplete / Valid) =====
+/* ========== EA: MY REQUIREMENTS (INCOMPLETE / VALID) ========== */
+
 async function loadEARequirementsView() {
   const container = $('eaReqViewContainer');
   container.className = 'mt-12 loader-text';
@@ -399,7 +448,7 @@ async function loadEARequirementsView() {
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
   }
 }
 
@@ -438,7 +487,8 @@ function renderRequirementTable(list) {
   `;
 }
 
-// ===== HR Requirements Review =====
+/* ========== HR: REVIEW REQUIREMENTS (POLISHED) ========== */
+
 async function loadHRRequirements() {
   const container = $('hrRequirementsContainer');
   container.className = 'mt-12 loader-text';
@@ -446,96 +496,206 @@ async function loadHRRequirements() {
 
   try {
     const res = await apiGet('list_requirements');
-    const list = res.data || [];
-
-    container.className = 'mt-12';
-    if (!list.length) {
-      container.innerHTML = `<div class="muted">No requirements found.</div>`;
-      return;
-    }
-
-    let rows = '';
-    list.forEach(r => {
-      const st = r.Status || '';
-      rows += `
-        <tr data-req-id="${htmlEscape(r.RequirementId)}">
-          <td>${htmlEscape(r.RequirementId)}</td>
-          <td>${htmlEscape(r.JobRole)}</td>
-          <td>${htmlEscape(r.JobTitle)}</td>
-          <td><span class="status-pill status-${htmlEscape(st)}">${htmlEscape(st)}</span></td>
-          <td>${htmlEscape(r.HRRemark || '')}</td>
-          <td>
-            <select class="hr-status-select">
-              <option value="">--Select--</option>
-              <option value="VALID">VALID</option>
-              <option value="SEND_BACK">SEND_BACK</option>
-            </select>
-            <input class="hr-remark-input" type="text" placeholder="HR remark (for SEND_BACK mandatory)" />
-            <button class="small btn-save-status">Save</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    container.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>RequirementId</th>
-              <th>Role</th>
-              <th>Title</th>
-              <th>Status</th>
-              <th>HR Remark</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-
-    container.querySelectorAll('.btn-save-status').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const tr = btn.closest('tr');
-        const reqId = tr.getAttribute('data-req-id');
-        const status = tr.querySelector('.hr-status-select').value;
-        const remark = tr.querySelector('.hr-remark-input').value.trim();
-
-        if (!status) {
-          alert('Status select karo.');
-          return;
-        }
-        if (status === 'SEND_BACK' && !remark) {
-          alert('SEND_BACK ke liye remark mandatory hai.');
-          return;
-        }
-
-        btn.disabled = true;
-        try {
-          await apiPost('update_requirement_status', {
-            requirementId: reqId,
-            status,
-            hrRemark: remark
-          });
-          alert('Updated (Check Sheet).');
-          // loadHRRequirements(); // Refresh hata diya taaki fake data dikhta rahe
-        } catch (err) {
-          console.error(err);
-          alert('Error: ' + err);
-        } finally {
-          btn.disabled = false;
-        }
-      });
-    });
+    hrReqList = res.data || [];
+    hrReqState.page = 1;
+    renderHRRequirementsTable();
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
   }
 }
 
-// ===== HR Upload CVs =====
+function renderHRRequirementsTable() {
+  const container = $('hrRequirementsContainer');
+  const all = hrReqList || [];
+
+  const search = (hrReqState.search || '').toLowerCase();
+  const statusFilter = hrReqState.statusFilter;
+
+  let filtered = all.filter(r => {
+    if (statusFilter !== 'ALL' && (r.Status || '') !== statusFilter) return false;
+
+    if (search) {
+      const blob = [
+        r.RequirementId,
+        r.JobRole,
+        r.JobTitle,
+        r.HRRemark
+      ].join(' ').toLowerCase();
+      if (!blob.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil((total || 1) / hrReqState.pageSize));
+  if (hrReqState.page > totalPages) hrReqState.page = totalPages;
+
+  const start = (hrReqState.page - 1) * hrReqState.pageSize;
+  const pageItems = filtered.slice(start, start + hrReqState.pageSize);
+
+  if (!total) {
+    container.className = 'mt-12';
+    container.innerHTML = `
+      <div class="flex-between mb-8">
+        <div class="flex" style="gap:8px;flex-wrap:wrap;">
+          <input id="hrReqSearch" type="text" placeholder="Search by Id / Role / Title..." style="max-width:220px;" />
+          <select id="hrReqStatusFilter">
+            <option value="ALL">Status: All</option>
+            <option value="DRAFT">DRAFT</option>
+            <option value="SEND_BACK">SEND_BACK</option>
+            <option value="VALID">VALID</option>
+          </select>
+        </div>
+        <span class="muted">No records found.</span>
+      </div>
+    `;
+    wireHRReqFilters();
+    return;
+  }
+
+  let rows = '';
+  pageItems.forEach(r => {
+    const st = r.Status || '';
+    rows += `
+      <tr data-req-id="${htmlEscape(r.RequirementId)}">
+        <td>${htmlEscape(r.RequirementId)}</td>
+        <td>${htmlEscape(r.JobRole)}</td>
+        <td>${htmlEscape(r.JobTitle)}</td>
+        <td><span class="status-pill status-${htmlEscape(st)}">${htmlEscape(st)}</span></td>
+        <td>${htmlEscape(r.HRRemark || '')}</td>
+        <td>
+          <select class="hr-status-select">
+            <option value="">--Select--</option>
+            <option value="VALID">VALID</option>
+            <option value="SEND_BACK">SEND_BACK</option>
+          </select>
+          <input class="hr-remark-input" type="text" placeholder="HR remark (SEND_BACK required)" />
+          <button class="small btn-save-status">Save</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  container.className = 'mt-12';
+  container.innerHTML = `
+    <div class="flex-between mb-8">
+      <div class="flex" style="gap:8px;flex-wrap:wrap;">
+        <input id="hrReqSearch" type="text" placeholder="Search by Id / Role / Title..." style="max-width:220px;" value="${htmlEscape(hrReqState.search)}" />
+        <select id="hrReqStatusFilter">
+          <option value="ALL" ${hrReqState.statusFilter === 'ALL' ? 'selected' : ''}>Status: All</option>
+          <option value="DRAFT" ${hrReqState.statusFilter === 'DRAFT' ? 'selected' : ''}>DRAFT</option>
+          <option value="SEND_BACK" ${hrReqState.statusFilter === 'SEND_BACK' ? 'selected' : ''}>SEND_BACK</option>
+          <option value="VALID" ${hrReqState.statusFilter === 'VALID' ? 'selected' : ''}>VALID</option>
+        </select>
+      </div>
+      <span class="muted">Total: ${total}</span>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>RequirementId</th>
+            <th>Role</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>HR Remark</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${buildPaginationControls(hrReqState, total)}
+  `;
+
+  wireHRReqFilters();
+  wireHRReqPagination();
+
+  container.querySelectorAll('.btn-save-status').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tr = btn.closest('tr');
+      const reqId = tr.getAttribute('data-req-id');
+      const status = tr.querySelector('.hr-status-select').value;
+      const remark = tr.querySelector('.hr-remark-input').value.trim();
+
+      if (!status) {
+        alert('Status select karo.');
+        return;
+      }
+      if (status === 'SEND_BACK' && !remark) {
+        alert('SEND_BACK ke liye remark mandatory hai.');
+        return;
+      }
+
+      btn.disabled = true;
+      try {
+        await apiPost('update_requirement_status', {
+          requirementId: reqId,
+          status,
+          hrRemark: remark
+        });
+        alert('Updated.');
+        await loadHRRequirements(); // re-fetch
+      } catch (err) {
+        console.error(err);
+        alert('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function wireHRReqFilters() {
+  const searchInput = $('hrReqSearch');
+  const statusSelect = $('hrReqStatusFilter');
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      hrReqState.search = searchInput.value;
+      hrReqState.page = 1;
+      renderHRRequirementsTable();
+    });
+  }
+  if (statusSelect) {
+    statusSelect.addEventListener('change', () => {
+      hrReqState.statusFilter = statusSelect.value;
+      hrReqState.page = 1;
+      renderHRRequirementsTable();
+    });
+  }
+}
+
+function wireHRReqPagination() {
+  const container = $('hrRequirementsContainer');
+  const prevBtn = container.querySelector('.pag-prev');
+  const nextBtn = container.querySelector('.pag-next');
+  const total = (hrReqList || []).length;
+  const totalPages = Math.max(1, Math.ceil((total || 1) / hrReqState.pageSize));
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (hrReqState.page > 1) {
+        hrReqState.page--;
+        renderHRRequirementsTable();
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (hrReqState.page < totalPages) {
+        hrReqState.page++;
+        renderHRRequirementsTable();
+      }
+    });
+  }
+}
+
+/* ========== HR: UPLOAD CVS (BULK) ========== */
+
 async function uploadCVs() {
   const reqId = $('uploadRequirementId').value.trim();
   const text = $('uploadCVList').value.trim();
@@ -571,23 +731,24 @@ async function uploadCVs() {
     msgEl.className = 'loader-text';
     msgEl.innerText = `Uploading ${files.length} CVs...`;
 
-    const res = await apiPost('batch_upload_cvs', {
+    await apiPost('batch_upload_cvs', {
       requirementId: reqId,
       files
     });
 
     msgEl.className = 'success';
-    msgEl.innerText = `Uploaded ${files.length} CVs. (Data sent to Sheet)`;
+    msgEl.innerText = `Upload request send ho gayi ✅ (${files.length} CVs)`;
   } catch (err) {
     console.error(err);
     msgEl.className = 'error';
-    msgEl.innerText = 'Error: ' + err;
+    msgEl.innerText = 'Error: ' + err.message;
   } finally {
     $('btnUploadCVs').disabled = false;
   }
 }
 
-// ===== HR Shortlisting =====
+/* ========== HR: SHORTLISTING (SEARCH + PAGINATION) ========== */
+
 async function loadShortlisting() {
   const reqId = $('shortlistRequirementId').value.trim();
   const container = $('shortlistContainer');
@@ -602,60 +763,139 @@ async function loadShortlisting() {
 
   try {
     const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    const list = (res.data || []).filter(c => ['UPLOADED', 'SHORTLISTED'].includes(c.Status));
-
-    if (!list.length) {
-      container.className = 'mt-12 muted';
-      container.innerText = 'No candidates for shortlisting.';
-      return;
-    }
-
-    container.className = 'mt-12';
-    let rows = '';
-    list.forEach(c => {
-      rows += `
-        <tr data-cid="${htmlEscape(c.CandidateId)}">
-          <td>${htmlEscape(c.CandidateId)}</td>
-          <td>${htmlEscape(c.CandidateName)}</td>
-          <td>${htmlEscape(c.Mobile)}</td>
-          <td>${htmlEscape(c.Source)}</td>
-          <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
-          <td>
-            <button class="small btn-approve">Approve</button>
-            <button class="small danger btn-reject">Reject</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    container.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>CandidateId</th>
-              <th>Name</th>
-              <th>Mobile</th>
-              <th>Source</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-
-    container.querySelectorAll('.btn-approve').forEach(btn => {
-      btn.addEventListener('click', () => shortlistDecision(btn, 'APPROVE'));
-    });
-    container.querySelectorAll('.btn-reject').forEach(btn => {
-      btn.addEventListener('click', () => shortlistDecision(btn, 'REJECT'));
-    });
+    shortlistList = (res.data || []).filter(c =>
+      ['UPLOADED', 'SHORTLISTED'].includes(c.Status)
+    );
+    shortlistState.page = 1;
+    renderShortlistingTable();
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
+  }
+}
+
+function renderShortlistingTable() {
+  const container = $('shortlistContainer');
+  const all = shortlistList || [];
+
+  const search = (shortlistState.search || '').toLowerCase();
+
+  let filtered = all.filter(c => {
+    if (!search) return true;
+    const blob = [
+      c.CandidateId,
+      c.CandidateName,
+      c.Mobile,
+      c.Source
+    ].join(' ').toLowerCase();
+    return blob.includes(search);
+  });
+
+  const total = filtered.length;
+  if (!total) {
+    container.className = 'mt-12';
+    container.innerHTML = `
+      <div class="flex-between mb-8">
+        <input id="shortlistSearch" type="text" placeholder="Search by name / mobile / source..." style="max-width:260px;" />
+        <span class="muted">No candidates for shortlisting.</span>
+      </div>
+    `;
+    wireShortlistFilters();
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil((total || 1) / shortlistState.pageSize));
+  if (shortlistState.page > totalPages) shortlistState.page = totalPages;
+
+  const start = (shortlistState.page - 1) * shortlistState.pageSize;
+  const pageItems = filtered.slice(start, start + shortlistState.pageSize);
+
+  let rows = '';
+  pageItems.forEach(c => {
+    rows += `
+      <tr data-cid="${htmlEscape(c.CandidateId)}">
+        <td>${htmlEscape(c.CandidateId)}</td>
+        <td>${htmlEscape(c.CandidateName)}</td>
+        <td>${htmlEscape(c.Mobile)}</td>
+        <td>${htmlEscape(c.Source)}</td>
+        <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
+        <td>
+          <button class="small btn-approve">Approve</button>
+          <button class="small danger btn-reject">Reject</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  container.className = 'mt-12';
+  container.innerHTML = `
+    <div class="flex-between mb-8">
+      <input id="shortlistSearch" type="text" placeholder="Search by name / mobile / source..." style="max-width:260px;" value="${htmlEscape(shortlistState.search)}" />
+      <span class="muted">Total: ${total}</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>CandidateId</th>
+            <th>Name</th>
+            <th>Mobile</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${buildPaginationControls(shortlistState, total)}
+  `;
+
+  wireShortlistFilters();
+  wireShortlistPagination();
+
+  container.querySelectorAll('.btn-approve').forEach(btn => {
+    btn.addEventListener('click', () => shortlistDecision(btn, 'APPROVE'));
+  });
+  container.querySelectorAll('.btn-reject').forEach(btn => {
+    btn.addEventListener('click', () => shortlistDecision(btn, 'REJECT'));
+  });
+}
+
+function wireShortlistFilters() {
+  const input = $('shortlistSearch');
+  if (input) {
+    input.addEventListener('input', () => {
+      shortlistState.search = input.value;
+      shortlistState.page = 1;
+      renderShortlistingTable();
+    });
+  }
+}
+
+function wireShortlistPagination() {
+  const container = $('shortlistContainer');
+  const prevBtn = container.querySelector('.pag-prev');
+  const nextBtn = container.querySelector('.pag-next');
+  const total = (shortlistList || []).length;
+  const totalPages = Math.max(1, Math.ceil((total || 1) / shortlistState.pageSize));
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (shortlistState.page > 1) {
+        shortlistState.page--;
+        renderShortlistingTable();
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (shortlistState.page < totalPages) {
+        shortlistState.page++;
+        renderShortlistingTable();
+      }
+    });
   }
 }
 
@@ -677,17 +917,18 @@ async function shortlistDecision(btn, decision) {
       decision,
       remark
     });
-    alert('Decision Saved (Check Sheet).');
-    // loadShortlisting(); // Refresh removed due to no-cors
+    alert('Saved.');
+    loadShortlisting();
   } catch (err) {
     console.error(err);
-    alert('Error: ' + err);
+    alert('Error: ' + err.message);
   } finally {
     btn.disabled = false;
   }
 }
 
-// ===== HR Call Screening =====
+/* ========== HR: CALL SCREENING (SEARCH + PAGINATION) ========== */
+
 async function loadCallScreening() {
   const reqId = $('callRequirementId').value.trim();
   const container = $('callScreenContainer');
@@ -702,68 +943,143 @@ async function loadCallScreening() {
 
   try {
     const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    const list = (res.data || []).filter(c => c.Status === 'SHORTLISTED');
-
-    if (!list.length) {
-      container.className = 'mt-12 muted';
-      container.innerText = 'No candidates for call screening.';
-      return;
-    }
-
-    container.className = 'mt-12';
-    let rows = '';
-    list.forEach(c => {
-      rows += `
-        <tr data-cid="${htmlEscape(c.CandidateId)}">
-          <td>${htmlEscape(c.CandidateId)}</td>
-          <td>${htmlEscape(c.CandidateName)}</td>
-          <td>${htmlEscape(c.Mobile)}</td>
-          <td>${htmlEscape(c.Source)}</td>
-          <td>
-            <textarea class="cs-family" placeholder="Family background notes..."></textarea>
-          </td>
-          <td>
-            <select class="cs-call-status">
-              <option value="RecommendedOwner">Recommended for Owners</option>
-              <option value="SwitchedOff">Switched Off</option>
-              <option value="NoAnswer">No Answer</option>
-              <option value="NoIncoming">No Incoming</option>
-              <option value="Reject">Reject</option>
-            </select>
-            <input class="cs-comm" type="number" min="0" max="10" placeholder="Comm /10" />
-            <input class="cs-exp" type="number" min="0" max="10" placeholder="Exp /10" />
-            <input class="cs-remark" type="text" placeholder="Remark (for Reject)" />
-            <button class="small btn-save-call">Save</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    container.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>CandidateId</th>
-              <th>Name</th>
-              <th>Mobile</th>
-              <th>Source</th>
-              <th>Family Notes</th>
-              <th>Call Status & Scores</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-
-    container.querySelectorAll('.btn-save-call').forEach(btn => {
-      btn.addEventListener('click', () => saveCallScreenRow(btn));
-    });
+    callScreenList = (res.data || []).filter(c => c.Status === 'SHORTLISTED');
+    callScreenState.page = 1;
+    renderCallScreenTable();
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
+  }
+}
+
+function renderCallScreenTable() {
+  const container = $('callScreenContainer');
+  const all = callScreenList || [];
+  const search = (callScreenState.search || '').toLowerCase();
+
+  let filtered = all.filter(c => {
+    if (!search) return true;
+    const blob = [
+      c.CandidateId,
+      c.CandidateName,
+      c.Mobile,
+      c.Source
+    ].join(' ').toLowerCase();
+    return blob.includes(search);
+  });
+
+  const total = filtered.length;
+  if (!total) {
+    container.className = 'mt-12';
+    container.innerHTML = `
+      <div class="flex-between mb-8">
+        <input id="callScreenSearch" type="text" placeholder="Search by name / mobile / source..." style="max-width:260px;" />
+        <span class="muted">No candidates for call screening.</span>
+      </div>
+    `;
+    wireCallScreenFilters();
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil((total || 1) / callScreenState.pageSize));
+  if (callScreenState.page > totalPages) callScreenState.page = totalPages;
+
+  const start = (callScreenState.page - 1) * callScreenState.pageSize;
+  const pageItems = filtered.slice(start, start + callScreenState.pageSize);
+
+  let rows = '';
+  pageItems.forEach(c => {
+    rows += `
+      <tr data-cid="${htmlEscape(c.CandidateId)}">
+        <td>${htmlEscape(c.CandidateId)}</td>
+        <td>${htmlEscape(c.CandidateName)}</td>
+        <td>${htmlEscape(c.Mobile)}</td>
+        <td>${htmlEscape(c.Source)}</td>
+        <td>
+          <textarea class="cs-family" placeholder="Family background notes..."></textarea>
+        </td>
+        <td>
+          <select class="cs-call-status">
+            <option value="RecommendedOwner">Recommended for Owners</option>
+            <option value="SwitchedOff">Switched Off</option>
+            <option value="NoAnswer">No Answer</option>
+            <option value="NoIncoming">No Incoming</option>
+            <option value="Reject">Reject</option>
+          </select>
+          <input class="cs-comm" type="number" min="0" max="10" placeholder="Comm /10" />
+          <input class="cs-exp" type="number" min="0" max="10" placeholder="Exp /10" />
+          <input class="cs-remark" type="text" placeholder="Remark (for Reject)" />
+          <button class="small btn-save-call">Save</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  container.className = 'mt-12';
+  container.innerHTML = `
+    <div class="flex-between mb-8">
+      <input id="callScreenSearch" type="text" placeholder="Search by name / mobile / source..." style="max-width:260px;" value="${htmlEscape(callScreenState.search)}" />
+      <span class="muted">Total: ${total}</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>CandidateId</th>
+            <th>Name</th>
+            <th>Mobile</th>
+            <th>Source</th>
+            <th>Family Notes</th>
+            <th>Call Status & Scores</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${buildPaginationControls(callScreenState, total)}
+  `;
+
+  wireCallScreenFilters();
+  wireCallScreenPagination();
+  container.querySelectorAll('.btn-save-call').forEach(btn => {
+    btn.addEventListener('click', () => saveCallScreenRow(btn));
+  });
+}
+
+function wireCallScreenFilters() {
+  const input = $('callScreenSearch');
+  if (input) {
+    input.addEventListener('input', () => {
+      callScreenState.search = input.value;
+      callScreenState.page = 1;
+      renderCallScreenTable();
+    });
+  }
+}
+
+function wireCallScreenPagination() {
+  const container = $('callScreenContainer');
+  const prevBtn = container.querySelector('.pag-prev');
+  const nextBtn = container.querySelector('.pag-next');
+  const total = (callScreenList || []).length;
+  const totalPages = Math.max(1, Math.ceil((total || 1) / callScreenState.pageSize));
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (callScreenState.page > 1) {
+        callScreenState.page--;
+        renderCallScreenTable();
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (callScreenState.page < totalPages) {
+        callScreenState.page++;
+        renderCallScreenTable();
+      }
+    });
   }
 }
 
@@ -795,16 +1111,17 @@ async function saveCallScreenRow(btn) {
       experience10: exp,
       hrRemark: remark
     });
-    alert('Screening Saved (Check Sheet).');
+    alert('Saved.');
   } catch (err) {
     console.error(err);
-    alert('Error: ' + err);
+    alert('Error: ' + err.message);
   } finally {
     btn.disabled = false;
   }
 }
 
-// ===== HR Owner Discussion =====
+/* ========== HR: OWNER DISCUSSION ========== */
+
 async function loadOwnerDiscuss() {
   const reqId = $('ownerRequirementId').value.trim();
   const container = $('ownerDiscussContainer');
@@ -819,65 +1136,168 @@ async function loadOwnerDiscuss() {
 
   try {
     const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    const list = (res.data || []).filter(c => ['SHORTLISTED', 'ON_HOLD'].includes(c.Status));
-
-    if (!list.length) {
-      container.className = 'mt-12 muted';
-      container.innerText = 'No candidates for owner discussion.';
-      return;
-    }
-
-    container.className = 'mt-12';
-    let rows = '';
-    list.forEach(c => {
-      rows += `
-        <tr data-cid="${htmlEscape(c.CandidateId)}">
-          <td>${htmlEscape(c.CandidateId)}</td>
-          <td>${htmlEscape(c.CandidateName)}</td>
-          <td>${htmlEscape(c.JobRole || '')}</td>
-          <td>${htmlEscape(c.JobTitle || '')}</td>
-          <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
-          <td>
-            <select class="owner-decision">
-              <option value="APPROVED">APPROVED (Walk-in)</option>
-              <option value="REJECTED">REJECTED</option>
-              <option value="HOLD">HOLD</option>
-            </select>
-            <input class="owner-walk-date" type="date" />
-            <input class="owner-walk-time" type="time" />
-            <input class="owner-hold" type="text" placeholder="Hold reason" />
-            <input class="owner-remark" type="text" placeholder="Owner remark" />
-            <button class="small btn-save-owner">Save</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    container.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>CandidateId</th>
-              <th>Name</th>
-              <th>Role</th>
-              <th>Title</th>
-              <th>Status</th>
-              <th>Owner Decision</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-
-    container.querySelectorAll('.btn-save-owner').forEach(btn => {
-      btn.addEventListener('click', () => saveOwnerRow(btn));
-    });
+    ownerDiscussList = (res.data || []).filter(c =>
+      ['SHORTLISTED', 'ON_HOLD'].includes(c.Status)
+    );
+    ownerDiscussState.page = 1;
+    renderOwnerDiscussTable();
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
+  }
+}
+
+function renderOwnerDiscussTable() {
+  const container = $('ownerDiscussContainer');
+  const all = ownerDiscussList || [];
+
+  const search = (ownerDiscussState.search || '').toLowerCase();
+  const statusFilter = ownerDiscussState.statusFilter;
+
+  let filtered = all.filter(c => {
+    if (statusFilter !== 'ALL' && (c.Status || '') !== statusFilter) return false;
+    if (!search) return true;
+    const blob = [
+      c.CandidateId,
+      c.CandidateName,
+      c.JobRole,
+      c.JobTitle
+    ].join(' ').toLowerCase();
+    return blob.includes(search);
+  });
+
+  const total = filtered.length;
+  if (!total) {
+    container.className = 'mt-12';
+    container.innerHTML = `
+      <div class="flex-between mb-8">
+        <div class="flex" style="gap:8px;flex-wrap:wrap;">
+          <input id="ownerSearch" type="text" placeholder="Search by name / role / title..." style="max-width:260px;" />
+          <select id="ownerStatusFilter">
+            <option value="ALL">Stage: All</option>
+            <option value="SHORTLISTED">SHORTLISTED</option>
+            <option value="ON_HOLD">ON_HOLD</option>
+          </select>
+        </div>
+        <span class="muted">No candidates for owner discussion.</span>
+      </div>
+    `;
+    wireOwnerDiscussFilters();
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil((total || 1) / ownerDiscussState.pageSize));
+  if (ownerDiscussState.page > totalPages) ownerDiscussState.page = totalPages;
+
+  const start = (ownerDiscussState.page - 1) * ownerDiscussState.pageSize;
+  const pageItems = filtered.slice(start, start + ownerDiscussState.pageSize);
+
+  let rows = '';
+  pageItems.forEach(c => {
+    rows += `
+      <tr data-cid="${htmlEscape(c.CandidateId)}">
+        <td>${htmlEscape(c.CandidateId)}</td>
+        <td>${htmlEscape(c.CandidateName)}</td>
+        <td>${htmlEscape(c.JobRole || '')}</td>
+        <td>${htmlEscape(c.JobTitle || '')}</td>
+        <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
+        <td>
+          <select class="owner-decision">
+            <option value="APPROVED">APPROVED (Walk-in)</option>
+            <option value="REJECTED">REJECTED</option>
+            <option value="HOLD">HOLD</option>
+          </select>
+          <input class="owner-walk-date" type="date" />
+          <input class="owner-walk-time" type="time" />
+          <input class="owner-hold" type="text" placeholder="Hold reason" />
+          <input class="owner-remark" type="text" placeholder="Owner remark" />
+          <button class="small btn-save-owner">Save</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  container.className = 'mt-12';
+  container.innerHTML = `
+    <div class="flex-between mb-8">
+      <div class="flex" style="gap:8px;flex-wrap:wrap;">
+        <input id="ownerSearch" type="text" placeholder="Search by name / role / title..." style="max-width:260px;" value="${htmlEscape(ownerDiscussState.search)}" />
+        <select id="ownerStatusFilter">
+          <option value="ALL" ${ownerDiscussState.statusFilter === 'ALL' ? 'selected' : ''}>Stage: All</option>
+          <option value="SHORTLISTED" ${ownerDiscussState.statusFilter === 'SHORTLISTED' ? 'selected' : ''}>SHORTLISTED</option>
+          <option value="ON_HOLD" ${ownerDiscussState.statusFilter === 'ON_HOLD' ? 'selected' : ''}>ON_HOLD</option>
+        </select>
+      </div>
+      <span class="muted">Total: ${total}</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>CandidateId</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Owner Decision</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${buildPaginationControls(ownerDiscussState, total)}
+  `;
+
+  wireOwnerDiscussFilters();
+  wireOwnerDiscussPagination();
+  container.querySelectorAll('.btn-save-owner').forEach(btn => {
+    btn.addEventListener('click', () => saveOwnerRow(btn));
+  });
+}
+
+function wireOwnerDiscussFilters() {
+  const searchInput = $('ownerSearch');
+  const statusSelect = $('ownerStatusFilter');
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      ownerDiscussState.search = searchInput.value;
+      ownerDiscussState.page = 1;
+      renderOwnerDiscussTable();
+    });
+  }
+  if (statusSelect) {
+    statusSelect.addEventListener('change', () => {
+      ownerDiscussState.statusFilter = statusSelect.value;
+      ownerDiscussState.page = 1;
+      renderOwnerDiscussTable();
+    });
+  }
+}
+
+function wireOwnerDiscussPagination() {
+  const container = $('ownerDiscussContainer');
+  const prevBtn = container.querySelector('.pag-prev');
+  const nextBtn = container.querySelector('.pag-next');
+  const total = (ownerDiscussList || []).length;
+  const totalPages = Math.max(1, Math.ceil((total || 1) / ownerDiscussState.pageSize));
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (ownerDiscussState.page > 1) {
+        ownerDiscussState.page--;
+        renderOwnerDiscussTable();
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (ownerDiscussState.page < totalPages) {
+        ownerDiscussState.page++;
+        renderOwnerDiscussTable();
+      }
+    });
   }
 }
 
@@ -917,16 +1337,17 @@ async function saveOwnerRow(btn) {
       walkinTime: walkTime,
       holdReason: hold
     });
-    alert('Decision Saved (Check Sheet).');
+    alert('Saved.');
   } catch (err) {
     console.error(err);
-    alert('Error: ' + err);
+    alert('Error: ' + err.message);
   } finally {
     btn.disabled = false;
   }
 }
 
-// ===== Job Posting Panel =====
+/* ========== HR: JOB POSTING ========== */
+
 async function loadJobPosting() {
   const reqId = $('postingRequirementId').value.trim();
   const container = $('jobPostingContainer');
@@ -969,6 +1390,9 @@ async function loadJobPosting() {
     });
 
     container.innerHTML = `
+      <div class="muted mb-8">
+        Portal wise status maintain karo – tick = posted, URL = screenshot link (Drive / portal).
+      </div>
       <div style="overflow-x:auto;">
         <table>
           <thead>
@@ -988,7 +1412,7 @@ async function loadJobPosting() {
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
   }
 }
 
@@ -1012,14 +1436,15 @@ async function saveJobPosting(reqId) {
       requirementId: reqId,
       postings
     });
-    alert('Job posting status saved (Check Sheet).');
+    alert('Job posting status saved.');
   } catch (err) {
     console.error(err);
-    alert('Error: ' + err);
+    alert('Error: ' + err.message);
   }
 }
 
-// ===== Schedule Interviews =====
+/* ========== HR: SCHEDULE INTERVIEWS ========== */
+
 async function loadScheduleInterviews() {
   const reqId = $('scheduleReqId').value.trim();
   const container = $('scheduleContainer');
@@ -1034,60 +1459,135 @@ async function loadScheduleInterviews() {
 
   try {
     const res = await apiGet('list_applicants_by_requirement', { requirementId: reqId });
-    const list = (res.data || []).filter(c =>
+    scheduleList = (res.data || []).filter(c =>
       ['OWNER_APPROVED_WALKIN', 'SCHEDULED'].includes(c.Status)
     );
-
-    if (!list.length) {
-      container.className = 'mt-12 muted';
-      container.innerText = 'No candidates for scheduling.';
-      return;
-    }
-
-    container.className = 'mt-12';
-    let rows = '';
-    list.forEach(c => {
-      rows += `
-        <tr data-cid="${htmlEscape(c.CandidateId)}">
-          <td>${htmlEscape(c.CandidateId)}</td>
-          <td>${htmlEscape(c.CandidateName)}</td>
-          <td>${htmlEscape(c.JobRole || '')}</td>
-          <td>${htmlEscape(c.JobTitle || '')}</td>
-          <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
-          <td>
-            <input class="sched-date" type="date" />
-            <input class="sched-time" type="time" />
-            <button class="small btn-save-sched">Save</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    container.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>CandidateId</th>
-              <th>Name</th>
-              <th>Role</th>
-              <th>Title</th>
-              <th>Status</th>
-              <th>Interview Date &amp; Time</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-
-    container.querySelectorAll('.btn-save-sched').forEach(btn => {
-      btn.addEventListener('click', () => saveScheduleRow(btn));
-    });
+    scheduleState.page = 1;
+    renderScheduleTable();
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
+  }
+}
+
+function renderScheduleTable() {
+  const container = $('scheduleContainer');
+  const all = scheduleList || [];
+  const search = (scheduleState.search || '').toLowerCase();
+
+  let filtered = all.filter(c => {
+    if (!search) return true;
+    const blob = [
+      c.CandidateId,
+      c.CandidateName,
+      c.JobRole,
+      c.JobTitle
+    ].join(' ').toLowerCase();
+    return blob.includes(search);
+  });
+
+  const total = filtered.length;
+  if (!total) {
+    container.className = 'mt-12';
+    container.innerHTML = `
+      <div class="flex-between mb-8">
+        <input id="scheduleSearch" type="text" placeholder="Search by name / role / title..." style="max-width:260px;" />
+        <span class="muted">No candidates for scheduling.</span>
+      </div>
+    `;
+    wireScheduleFilters();
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil((total || 1) / scheduleState.pageSize));
+  if (scheduleState.page > totalPages) scheduleState.page = totalPages;
+
+  const start = (scheduleState.page - 1) * scheduleState.pageSize;
+  const pageItems = filtered.slice(start, start + scheduleState.pageSize);
+
+  let rows = '';
+  pageItems.forEach(c => {
+    rows += `
+      <tr data-cid="${htmlEscape(c.CandidateId)}">
+        <td>${htmlEscape(c.CandidateId)}</td>
+        <td>${htmlEscape(c.CandidateName)}</td>
+        <td>${htmlEscape(c.JobRole || '')}</td>
+        <td>${htmlEscape(c.JobTitle || '')}</td>
+        <td><span class="status-pill status-${htmlEscape(c.Status || '')}">${htmlEscape(c.Status || '')}</span></td>
+        <td>
+          <input class="sched-date" type="date" />
+          <input class="sched-time" type="time" />
+          <button class="small btn-save-sched">Save</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  container.className = 'mt-12';
+  container.innerHTML = `
+    <div class="flex-between mb-8">
+      <input id="scheduleSearch" type="text" placeholder="Search by name / role / title..." style="max-width:260px;" value="${htmlEscape(scheduleState.search)}" />
+      <span class="muted">Total: ${total}</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>CandidateId</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Interview Date &amp; Time</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${buildPaginationControls(scheduleState, total)}
+  `;
+
+  wireScheduleFilters();
+  wireSchedulePagination();
+  container.querySelectorAll('.btn-save-sched').forEach(btn => {
+    btn.addEventListener('click', () => saveScheduleRow(btn));
+  });
+}
+
+function wireScheduleFilters() {
+  const input = $('scheduleSearch');
+  if (input) {
+    input.addEventListener('input', () => {
+      scheduleState.search = input.value;
+      scheduleState.page = 1;
+      renderScheduleTable();
+    });
+  }
+}
+
+function wireSchedulePagination() {
+  const container = $('scheduleContainer');
+  const prevBtn = container.querySelector('.pag-prev');
+  const nextBtn = container.querySelector('.pag-next');
+  const total = (scheduleList || []).length;
+  const totalPages = Math.max(1, Math.ceil((total || 1) / scheduleState.pageSize));
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (scheduleState.page > 1) {
+        scheduleState.page--;
+        renderScheduleTable();
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (scheduleState.page < totalPages) {
+        scheduleState.page++;
+        renderScheduleTable();
+      }
+    });
   }
 }
 
@@ -1109,16 +1609,17 @@ async function saveScheduleRow(btn) {
       scheduledDate: date,
       scheduledTime: time
     });
-    alert('Interview scheduled (Check Sheet).');
+    alert('Interview scheduled.');
   } catch (err) {
     console.error(err);
-    alert('Error: ' + err);
+    alert('Error: ' + err.message);
   } finally {
     btn.disabled = false;
   }
 }
 
-// ===== Walk-ins (Today ke Interviews) =====
+/* ========== HR: WALK-INS (TODAY + TOKEN LINK) ========== */
+
 async function loadWalkins() {
   const input = $('walkinDate');
   if (!input.value) {
@@ -1132,68 +1633,174 @@ async function loadWalkins() {
 
   try {
     const res = await apiGet('list_walkins', { date: dateStr });
-    const list = res.data || [];
-
-    if (!list.length) {
-      container.className = 'mt-12 muted';
-      container.innerText = 'No interviews for this date.';
-      return;
-    }
-
-    container.className = 'mt-12';
-    let rows = '';
-    list.forEach(c => {
-      const linkCell = `<span class="muted">Click "Appeared" to generate link</span>`;
-      rows += `
-        <tr data-cid="${htmlEscape(c.CandidateId)}">
-          <td>${htmlEscape(c.CandidateId)}</td>
-          <td>${htmlEscape(c.CandidateName)}</td>
-          <td>${htmlEscape(c.Mobile)}</td>
-          <td>${htmlEscape(c.JobRole || '')}</td>
-          <td>${htmlEscape(c.JobTitle || '')}</td>
-          <td>${htmlEscape(c.InterviewTime || '')}</td>
-          <td>
-            <input type="checkbox" class="w-conf" ${c.ConfirmedCall ? 'checked' : ''} />
-          </td>
-          <td>
-            <button class="small btn-mark-appeared">Appeared</button>
-          </td>
-          <td class="walkin-link-cell">${linkCell}</td>
-        </tr>
-      `;
-    });
-
-    container.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>CandidateId</th>
-              <th>Name</th>
-              <th>Mobile</th>
-              <th>Role</th>
-              <th>Title</th>
-              <th>Time</th>
-              <th>Confirm Call</th>
-              <th>Appeared</th>
-              <th>Walk-in Link</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-
-    container.querySelectorAll('.w-conf').forEach(chk => {
-      chk.addEventListener('change', () => saveWalkinConfirm(chk));
-    });
-    container.querySelectorAll('.btn-mark-appeared').forEach(btn => {
-      btn.addEventListener('click', () => markWalkinAppeared(btn));
-    });
+    walkinsList = res.data || [];
+    walkinsState.page = 1;
+    renderWalkinsTable();
   } catch (err) {
     console.error(err);
     container.className = 'error mt-12';
-    container.innerText = 'Error: ' + err;
+    container.innerText = 'Error: ' + err.message;
+  }
+}
+
+function renderWalkinsTable() {
+  const container = $('walkinsContainer');
+  const all = walkinsList || [];
+  const search = (walkinsState.search || '').toLowerCase();
+  const filter = walkinsState.filter;
+
+  let filtered = all.filter(c => {
+    if (filter === 'CONFIRM_PENDING' && c.ConfirmedCall) return false;
+    if (filter === 'CONFIRMED' && !c.ConfirmedCall) return false;
+    if (filter === 'APPEARED' && !c.Appeared) return false;
+
+    if (!search) return true;
+    const blob = [
+      c.CandidateId,
+      c.CandidateName,
+      c.Mobile,
+      c.JobRole,
+      c.JobTitle
+    ].join(' ').toLowerCase();
+    return blob.includes(search);
+  });
+
+  const total = filtered.length;
+  if (!total) {
+    container.className = 'mt-12';
+    container.innerHTML = `
+      <div class="flex-between mb-8">
+        <div class="flex" style="gap:8px;flex-wrap:wrap;">
+          <input id="walkinSearch" type="text" placeholder="Search by name / mobile / role..." style="max-width:260px;" />
+          <select id="walkinFilter">
+            <option value="ALL">All</option>
+            <option value="CONFIRM_PENDING">Confirm Pending</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="APPEARED">Appeared</option>
+          </select>
+        </div>
+        <span class="muted">No interviews for this date.</span>
+      </div>
+    `;
+    wireWalkinsFilters();
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil((total || 1) / walkinsState.pageSize));
+  if (walkinsState.page > totalPages) walkinsState.page = totalPages;
+
+  const start = (walkinsState.page - 1) * walkinsState.pageSize;
+  const pageItems = filtered.slice(start, start + walkinsState.pageSize);
+
+  let rows = '';
+  pageItems.forEach(c => {
+    const linkCell = `<span class="muted">Click "Appeared" to generate link</span>`;
+    rows += `
+      <tr data-cid="${htmlEscape(c.CandidateId)}">
+        <td>${htmlEscape(c.CandidateId)}</td>
+        <td>${htmlEscape(c.CandidateName)}</td>
+        <td>${htmlEscape(c.Mobile)}</td>
+        <td>${htmlEscape(c.JobRole || '')}</td>
+        <td>${htmlEscape(c.JobTitle || '')}</td>
+        <td>${htmlEscape(c.InterviewTime || '')}</td>
+        <td>
+          <input type="checkbox" class="w-conf" ${c.ConfirmedCall ? 'checked' : ''} />
+        </td>
+        <td>
+          <button class="small btn-mark-appeared">Appeared</button>
+        </td>
+        <td class="walkin-link-cell">${linkCell}</td>
+      </tr>
+    `;
+  });
+
+  container.className = 'mt-12';
+  container.innerHTML = `
+    <div class="flex-between mb-8">
+      <div class="flex" style="gap:8px;flex-wrap:wrap;">
+        <input id="walkinSearch" type="text" placeholder="Search by name / mobile / role..." style="max-width:260px;" value="${htmlEscape(walkinsState.search)}" />
+        <select id="walkinFilter">
+          <option value="ALL" ${walkinsState.filter === 'ALL' ? 'selected' : ''}>All</option>
+          <option value="CONFIRM_PENDING" ${walkinsState.filter === 'CONFIRM_PENDING' ? 'selected' : ''}>Confirm Pending</option>
+          <option value="CONFIRMED" ${walkinsState.filter === 'CONFIRMED' ? 'selected' : ''}>Confirmed</option>
+          <option value="APPEARED" ${walkinsState.filter === 'APPEARED' ? 'selected' : ''}>Appeared</option>
+        </select>
+      </div>
+      <span class="muted">Total: ${total}</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>CandidateId</th>
+            <th>Name</th>
+            <th>Mobile</th>
+            <th>Role</th>
+            <th>Title</th>
+            <th>Time</th>
+            <th>Confirm Call</th>
+            <th>Appeared</th>
+            <th>Walk-in Link</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${buildPaginationControls(walkinsState, total)}
+  `;
+
+  wireWalkinsFilters();
+  wireWalkinsPagination();
+  container.querySelectorAll('.w-conf').forEach(chk => {
+    chk.addEventListener('change', () => saveWalkinConfirm(chk));
+  });
+  container.querySelectorAll('.btn-mark-appeared').forEach(btn => {
+    btn.addEventListener('click', () => markWalkinAppeared(btn));
+  });
+}
+
+function wireWalkinsFilters() {
+  const searchInput = $('walkinSearch');
+  const filterSelect = $('walkinFilter');
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      walkinsState.search = searchInput.value;
+      walkinsState.page = 1;
+      renderWalkinsTable();
+    });
+  }
+  if (filterSelect) {
+    filterSelect.addEventListener('change', () => {
+      walkinsState.filter = filterSelect.value;
+      walkinsState.page = 1;
+      renderWalkinsTable();
+    });
+  }
+}
+
+function wireWalkinsPagination() {
+  const container = $('walkinsContainer');
+  const prevBtn = container.querySelector('.pag-prev');
+  const nextBtn = container.querySelector('.pag-next');
+  const total = (walkinsList || []).length;
+  const totalPages = Math.max(1, Math.ceil((total || 1) / walkinsState.pageSize));
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (walkinsState.page > 1) {
+        walkinsState.page--;
+        renderWalkinsTable();
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (walkinsState.page < totalPages) {
+        walkinsState.page++;
+        renderWalkinsTable();
+      }
+    });
   }
 }
 
@@ -1207,10 +1814,9 @@ async function saveWalkinConfirm(chk) {
       candidateId: cid,
       confirmed
     });
-    // No alert needed for checkbox
   } catch (err) {
     console.error(err);
-    alert('Error: ' + err);
+    alert('Error: ' + err.message);
     chk.checked = !confirmed;
   }
 }
@@ -1220,13 +1826,28 @@ async function markWalkinAppeared(btn) {
   const cid = tr.getAttribute('data-cid');
   const linkCell = tr.querySelector('.walkin-link-cell');
 
+  // Frontend se token generate
+  const token =
+    'WALKIN-' +
+    Date.now() +
+    '-' +
+    Math.random().toString(36).slice(2, 10);
+
   btn.disabled = true;
   linkCell.innerHTML = '<span class="loader-text">Generating...</span>';
+
   try {
-    const res = await apiPost('walkin_mark_appeared', { candidateId: cid });
-    // IMPORTANT: NO-CORS MODE mein hum server se Token read nahi kar sakte.
-    // Isliye Link generate nahi ho payega.
-    linkCell.innerHTML = `<span class="success">Marked Appeared (Check Sheet)</span>`;
+    await apiPost('walkin_mark_appeared', {
+      candidateId: cid,
+      walkinToken: token
+    });
+
+    const link = `${WALKIN_FORM_URL}?walkinToken=${encodeURIComponent(token)}`;
+    linkCell.innerHTML = `
+      <a href="${link}" target="_blank" class="link">
+        Open Walk-in Form
+      </a>
+    `;
   } catch (err) {
     console.error(err);
     linkCell.innerHTML = '<span class="error">Error generating link.</span>';
@@ -1235,7 +1856,8 @@ async function markWalkinAppeared(btn) {
   }
 }
 
-// ===== Tests Panel =====
+/* ========== TESTS PANEL (Excel / Tally / Voice) ========== */
+
 async function saveTests() {
   const cid = $('testCandidateId').value.trim();
   const excel = $('testExcelMarks').value;
@@ -1259,57 +1881,69 @@ async function saveTests() {
 
   try {
     $('btnSaveTests').disabled = true;
-    const res = await apiPost('update_tests', data);
+    await apiPost('update_tests', data);
     msgEl.className = 'success';
-    msgEl.innerText = 'Marks updated (Check Sheet).';
+    msgEl.innerText = 'Marks updated.';
   } catch (err) {
     console.error(err);
     msgEl.className = 'error';
-    msgEl.innerText = 'Error: ' + err;
+    msgEl.innerText = 'Error: ' + err.message;
   } finally {
     $('btnSaveTests').disabled = false;
   }
 }
 
-// ===== Wire Events =====
+/* ========== BUTTON WIRING ========== */
+
 function wireAllButtons() {
-  $('btnSignOut').addEventListener('click', () => {
-    // simple sign-out (front-end level)
-    currentUser = null;
-    idToken = null;
-    location.reload();
-  });
+  const signOut = $('btnSignOut');
+  if (signOut) {
+    signOut.addEventListener('click', () => {
+      currentUser = null;
+      idToken = null;
+      location.reload();
+    });
+  }
 
   // EA
   const loadTplBtn = $('btnLoadTemplate');
   if (loadTplBtn) loadTplBtn.addEventListener('click', applyTemplateForSelectedRole);
+
   const saveReqBtn = $('btnSaveRequirement');
   if (saveReqBtn) saveReqBtn.addEventListener('click', saveRequirementEA);
+
   const refreshEAReqBtn = $('btnRefreshEARequirements');
   if (refreshEAReqBtn) refreshEAReqBtn.addEventListener('click', loadEARequirementsView);
 
-  // HR
+  // HR requirements
   const refreshHRReqBtn = $('btnRefreshHRRequirements');
   if (refreshHRReqBtn) refreshHRReqBtn.addEventListener('click', loadHRRequirements);
 
+  // Upload CVs
   const uploadBtn = $('btnUploadCVs');
   if (uploadBtn) uploadBtn.addEventListener('click', uploadCVs);
 
+  // Shortlisting
   const loadShortlistBtn = $('btnLoadShortlist');
   if (loadShortlistBtn) loadShortlistBtn.addEventListener('click', loadShortlisting);
 
+  // Call Screening
   const loadCallScreenBtn = $('btnLoadCallScreen');
   if (loadCallScreenBtn) loadCallScreenBtn.addEventListener('click', loadCallScreening);
 
+  // Owner Discussion
   const loadOwnerBtn = $('btnLoadOwnerDiscuss');
   if (loadOwnerBtn) loadOwnerBtn.addEventListener('click', loadOwnerDiscuss);
 
+  // Job Posting
   const loadPostingBtn = $('btnLoadJobPosting');
   if (loadPostingBtn) loadPostingBtn.addEventListener('click', loadJobPosting);
 
+  // Schedule Interviews
   const loadScheduleBtn = $('btnLoadSchedule');
   if (loadScheduleBtn) loadScheduleBtn.addEventListener('click', loadScheduleInterviews);
 
+  // Walk-ins
   const loadWalkinsBtn = $('btnLoadWalkins');
   if (loadWalkinsBtn) loadWalkinsBtn.addEventListener('click', loadWalkins);
 
@@ -1318,7 +1952,8 @@ function wireAllButtons() {
   if (saveTestsBtn) saveTestsBtn.addEventListener('click', saveTests);
 }
 
-// ===== Boot =====
+/* ========== BOOTSTRAP ========== */
+
 window.onload = function () {
   initGoogleLogin();
 };
